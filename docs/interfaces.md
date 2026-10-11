@@ -28,7 +28,7 @@ goods.csv ───────────────────────�
                                   [build_html] ─→ report.html
 ```
 
-数据文件统一放在 `data/`，输出统一放在 `output/`。
+数据文件统一放在 `data/`，输出统一放在 `outputs/`（按用途建子目录，如 `outputs/t25-final/`、`outputs/t25-baseline/`）。
 
 ---
 
@@ -230,9 +230,9 @@ def build_html(routes: dict, metrics: dict, guide_text: dict, figure_paths: list
 
 ```python
 """一条命令跑通全流程：
-   python run.py --data data/ --out output/ [--baseline]
-输出：output/routes.json, output/packing.json, output/loading_plan.json,
-      output/metrics.json, output/guide_text.json, output/figures/*.png, output/report.html
+   python run.py --data data/ --out outputs/ [--baseline]
+输出：outputs/routes.json, outputs/packing.json, outputs/loading_plan.json,
+      outputs/metrics.json, outputs/guide_text.json, outputs/figures/*.png, outputs/report.html
 """
 ```
 
@@ -337,12 +337,23 @@ def build_html(routes: dict, metrics: dict, guide_text: dict, figure_paths: list
     "avg_volume_utilization": 0.62,
     "on_time_rate": 1.0,
     "unassigned_order_count": 0,
+    "total_item_count": 3656,
+    "placed_item_count": 3384,
+    "unplaced_item_count": 272,
     "solve_time_sec": 12.3,
     "peak_memory_mb": 180.2
   },
   "per_route": []
 }
 ```
+
+> **对比节扩展**（v1.2 新增）：`build_html` 支持 `metrics["comparison"]` 可选键，结构为
+> `{"baseline": {指标键同本结构 metrics 子对象}, "optimized": {同上}}`。
+> `run.py` 传入该键即渲染对比表章节，不传则整节自动跳过。该键由窗口C（run.py）负责组装。
+>
+> **装载计数字段**（v1.3 新增）：`total_item_count` / `placed_item_count` / `unplaced_item_count`
+> （件级计数，含易碎件）由窗口C 的 run.py 组装；窗口E 的 build_html 用其渲染
+> "未装载 N 件"提示与装下率，未装载为 0 时自动隐藏相关提示。
 
 ### 3.5 `guide_text.json`
 
@@ -375,7 +386,7 @@ def build_html(routes: dict, metrics: dict, guide_text: dict, figure_paths: list
 │   ├── parser.py  explainer.py  prompts/
 ├── report/                   # 窗口E
 │   ├── render.py  build_html.py  templates/
-├── output/                   # 运行产物（git 忽略大图，保留 report.html）
+├── outputs/                  # 运行产物（report.html + JSON + figures 图件，均入库供评审查看）
 ├── experiments/              # 窗口C
 │   └── run_experiments.py  results.md
 ├── docs/                     # 主规划
@@ -394,3 +405,6 @@ def build_html(routes: dict, metrics: dict, guide_text: dict, figure_paths: list
 |------|------|------|------|
 | 2026-10-11 | v1.0 | 初始冻结 | 主规划窗口 |
 | 2026-10-11 | v1.1 | 3.1 节 routes.json 顶层新增 `solve_time_sec` / `peak_memory_mb` 性能字段（窗口C 必须输出，窗口B 的 compute_metrics 消费） | 主规划窗口（依窗口B 申请，17:15 批准） |
+| 2026-10-11 | v1.2 | 3.4 节新增可选键 `metrics["comparison"]`（baseline/optimized 对比节传参约定），由窗口E 申请、窗口C 的 run.py 负责组装 | 主规划窗口（19:05 批准） |
+| 2026-10-11 | v1.3 | 3.4 节 metrics 新增 `total_item_count` / `placed_item_count` / `unplaced_item_count` 件级计数字段（C 组装，E 渲染未装载提示） | 主规划窗口（依窗口E 申请，19:35 批准，方案 a+b 全采纳） |
+| 2026-10-11 | v1.4 | 文档更正：产物路径统一为 `outputs/`（含子目录约定），图件入库供评审查看；同步 .gitignore | 主规划窗口（20:00，依窗口B 路径核对提醒） |
