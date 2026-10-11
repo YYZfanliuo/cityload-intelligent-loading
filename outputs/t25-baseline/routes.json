@@ -1,0 +1,346 @@
+{
+  "status": "partial",
+  "solve_time_sec": 0.714464,
+  "peak_memory_mb": 79.082,
+  "solver_backend": "baseline_greedy",
+  "routes": [
+    {
+      "route_id": "R01",
+      "vehicle_type": "V01",
+      "sequence": [
+        "WH01",
+        "S03",
+        "S04",
+        "S08",
+        "S12",
+        "S16",
+        "S18",
+        "S21",
+        "S25",
+        "S26",
+        "WH01"
+      ],
+      "stop_details": [
+        {
+          "node": "S03",
+          "arrive": "08:20",
+          "start_service": "08:20",
+          "end_service": "08:42",
+          "load_kg": 174.07
+        },
+        {
+          "node": "S04",
+          "arrive": "09:06",
+          "start_service": "09:06",
+          "end_service": "09:21",
+          "load_kg": 363.45
+        },
+        {
+          "node": "S08",
+          "arrive": "09:45",
+          "start_service": "09:45",
+          "end_service": "10:04",
+          "load_kg": 570.23
+        },
+        {
+          "node": "S12",
+          "arrive": "12:00",
+          "start_service": "12:00",
+          "end_service": "12:17",
+          "load_kg": 780.32
+        },
+        {
+          "node": "S16",
+          "arrive": "12:36",
+          "start_service": "12:36",
+          "end_service": "12:54",
+          "load_kg": 899.05
+        },
+        {
+          "node": "S18",
+          "arrive": "13:34",
+          "start_service": "13:34",
+          "end_service": "13:56",
+          "load_kg": 1033.62
+        },
+        {
+          "node": "S21",
+          "arrive": "14:12",
+          "start_service": "14:12",
+          "end_service": "14:27",
+          "load_kg": 1237.76
+        },
+        {
+          "node": "S25",
+          "arrive": "14:49",
+          "start_service": "14:49",
+          "end_service": "15:10",
+          "load_kg": 1449.54
+        },
+        {
+          "node": "S26",
+          "arrive": "15:20",
+          "start_service": "15:20",
+          "end_service": "15:34",
+          "load_kg": 1654.28
+        }
+      ],
+      "total_distance_km": 106.485,
+      "total_duration_min": 462.3,
+      "total_load_kg": 1654.28,
+      "load_rate_weight": 0.9731,
+      "cost": 893.332
+    },
+    {
+      "route_id": "R02",
+      "vehicle_type": "V01",
+      "sequence": [
+        "WH01",
+        "S01",
+        "S06",
+        "S30",
+        "WH01"
+      ],
+      "stop_details": [
+        {
+          "node": "S01",
+          "arrive": "14:00",
+          "start_service": "14:00",
+          "end_service": "14:12",
+          "load_kg": 207.11
+        },
+        {
+          "node": "S06",
+          "arrive": "14:39",
+          "start_service": "14:39",
+          "end_service": "14:51",
+          "load_kg": 276.59
+        },
+        {
+          "node": "S30",
+          "arrive": "14:59",
+          "start_service": "14:59",
+          "end_service": "15:16",
+          "load_kg": 588.89
+        }
+      ],
+      "total_distance_km": 36.273,
+      "total_duration_min": 455.567,
+      "total_load_kg": 588.89,
+      "load_rate_weight": 0.3464,
+      "cost": 246.954
+    },
+    {
+      "route_id": "R03",
+      "vehicle_type": "V01",
+      "sequence": [
+        "WH01",
+        "S02",
+        "S07",
+        "S11",
+        "WH01"
+      ],
+      "stop_details": [
+        {
+          "node": "S02",
+          "arrive": "12:00",
+          "start_service": "12:00",
+          "end_service": "12:19",
+          "load_kg": 300.16
+        },
+        {
+          "node": "S07",
+          "arrive": "14:00",
+          "start_service": "14:00",
+          "end_service": "14:22",
+          "load_kg": 422.87
+        },
+        {
+          "node": "S11",
+          "arrive": "14:52",
+          "start_service": "14:52",
+          "end_service": "15:15",
+          "load_kg": 632.2
+        }
+      ],
+      "total_distance_km": 58.016,
+      "total_duration_min": 459.183,
+      "total_load_kg": 632.2,
+      "load_rate_weight": 0.3719,
+      "cost": 323.057
+    },
+    {
+      "route_id": "R04",
+      "vehicle_type": "V01",
+      "sequence": [
+        "WH01",
+        "S13",
+        "S17",
+        "S20",
+        "S22",
+        "S27",
+        "WH01"
+      ],
+      "stop_details": [
+        {
+          "node": "S13",
+          "arrive": "08:31",
+          "start_service": "08:31",
+          "end_service": "08:43",
+          "load_kg": 245.03
+        },
+        {
+          "node": "S17",
+          "arrive": "09:44",
+          "start_service": "09:44",
+          "end_service": "09:56",
+          "load_kg": 335.96
+        },
+        {
+          "node": "S20",
+          "arrive": "12:00",
+          "start_service": "12:00",
+          "end_service": "12:21",
+          "load_kg": 587.74
+        },
+        {
+          "node": "S22",
+          "arrive": "14:00",
+          "start_service": "14:00",
+          "end_service": "14:19",
+          "load_kg": 772.83
+        },
+        {
+          "node": "S27",
+          "arrive": "15:03",
+          "start_service": "15:03",
+          "end_service": "15:21",
+          "load_kg": 1033.27
+        }
+      ],
+      "total_distance_km": 133.093,
+      "total_duration_min": 479.317,
+      "total_load_kg": 1033.27,
+      "load_rate_weight": 0.6078,
+      "cost": 585.827
+    },
+    {
+      "route_id": "R05",
+      "vehicle_type": "V02",
+      "sequence": [
+        "WH01",
+        "S05",
+        "S14",
+        "WH01"
+      ],
+      "stop_details": [
+        {
+          "node": "S05",
+          "arrive": "14:00",
+          "start_service": "14:00",
+          "end_service": "14:22",
+          "load_kg": 279.2
+        },
+        {
+          "node": "S14",
+          "arrive": "15:00",
+          "start_service": "15:00",
+          "end_service": "15:11",
+          "load_kg": 351.2
+        }
+      ],
+      "total_distance_km": 54.124,
+      "total_duration_min": 468.8,
+      "total_load_kg": 351.2,
+      "load_rate_weight": 0.3512,
+      "cost": 231.547
+    },
+    {
+      "route_id": "R06",
+      "vehicle_type": "V02",
+      "sequence": [
+        "WH01",
+        "S10",
+        "S15",
+        "S23",
+        "WH01"
+      ],
+      "stop_details": [
+        {
+          "node": "S10",
+          "arrive": "12:00",
+          "start_service": "12:00",
+          "end_service": "12:11",
+          "load_kg": 191.42
+        },
+        {
+          "node": "S15",
+          "arrive": "14:00",
+          "start_service": "14:00",
+          "end_service": "14:15",
+          "load_kg": 386.12
+        },
+        {
+          "node": "S23",
+          "arrive": "14:40",
+          "start_service": "14:40",
+          "end_service": "15:01",
+          "load_kg": 500.44
+        }
+      ],
+      "total_distance_km": 87.714,
+      "total_duration_min": 455.7,
+      "total_load_kg": 500.44,
+      "load_rate_weight": 0.5004,
+      "cost": 325.599
+    },
+    {
+      "route_id": "R07",
+      "vehicle_type": "V02",
+      "sequence": [
+        "WH01",
+        "S09",
+        "S19",
+        "S28",
+        "WH01"
+      ],
+      "stop_details": [
+        {
+          "node": "S09",
+          "arrive": "12:00",
+          "start_service": "12:00",
+          "end_service": "12:24",
+          "load_kg": 267.34
+        },
+        {
+          "node": "S19",
+          "arrive": "12:29",
+          "start_service": "12:29",
+          "end_service": "12:44",
+          "load_kg": 352.73
+        },
+        {
+          "node": "S28",
+          "arrive": "14:06",
+          "start_service": "14:06",
+          "end_service": "14:26",
+          "load_kg": 613.19
+        }
+      ],
+      "total_distance_km": 89.625,
+      "total_duration_min": 435.183,
+      "total_load_kg": 613.19,
+      "load_rate_weight": 0.6132,
+      "cost": 584.316
+    }
+  ],
+  "unassigned_orders": [
+    "O0024",
+    "O0029"
+  ],
+  "summary": {
+    "vehicle_count": 7,
+    "total_distance_km": 565.33,
+    "total_cost": 5190.632
+  }
+}

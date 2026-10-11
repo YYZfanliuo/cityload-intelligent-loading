@@ -17,13 +17,14 @@
     / avg_volume_utilization / on_time_rate / unassigned_order_count
     / solve_time_sec / peak_memory_mb
 
-关于 solve_time_sec 与 peak_memory_mb（签名不可改，通过 result 传入）:
-    求解器可将两个可选字段附加在 result 顶层（或 summary/meta 之下）：
+关于 solve_time_sec 与 peak_memory_mb（接口契约 v1.1 · 3.1 节）:
+    求解器须将两个字段输出在 result 顶层（summary/meta 之下亦可读取）：
         result["solve_time_sec"] = 12.3     # 求解耗时
         result["peak_memory_mb"] = 180.2    # 峰值内存
-    均缺失时：solve_time_sec 输出 null；
-    peak_memory_mb 依次回退 tracemalloc 峰值（若调用方已 start()）→
-    psutil 当前 RSS → null。
+    peak_memory_mb 缺失时依次回退 tracemalloc 峰值（若调用方已 start()）→
+    psutil 当前 RSS；
+    两个字段最终仍无法获得时，按契约「缺失时按 0 计并在 metrics 中标注」处理：
+    数值记 0.0，并在返回结构顶层附加 warnings 数组说明。
 """
 
 from __future__ import annotations
@@ -206,11 +207,18 @@ def compute_metrics(result: dict, orders: dict, vehicles: dict, network: dict) -
             fallback.append(v / cap_vol)
         avg_volume = statistics.fmean(fallback) if fallback else 0.0
 
-    # --- 求解耗时 / 峰值内存 ---
+    # --- 求解耗时 / 峰值内存（v1.1 契约：缺失时按 0 计并标注） ---
+    warnings: list[str] = []
     solve_time = _read_opt_float(result, "solve_time_sec")
+    if solve_time is None:
+        solve_time = 0.0
+        warnings.append("solve_time_sec 缺失（result 顶层未提供），已按 0 计")
     peak_mem = _read_opt_float(result, "peak_memory_mb")
     if peak_mem is None:
         peak_mem = _fallback_peak_memory_mb()
+    if peak_mem is None:
+        peak_mem = 0.0
+        warnings.append("peak_memory_mb 缺失且无法探测（tracemalloc 未启动、psutil 不可用），已按 0 计")
 
     unassigned = result.get("unassigned_orders") or []
 
@@ -227,9 +235,12 @@ def compute_metrics(result: dict, orders: dict, vehicles: dict, network: dict) -
     }
 
     meta = orders.get("meta") or {}
-    return {
+    out = {
         "scenario": meta.get("scenario", "pharmacy_chain"),
         "seed": meta.get("seed"),
         "metrics": metrics,
         "per_route": per_route,
     }
+    if warnings:
+        out["warnings"] = warnings
+    return out

@@ -109,7 +109,8 @@ def test_case_a_hand_calc_cost_weight_on_time():
     assert m["avg_volume_utilization"] == pytest.approx(1.25 / 16.8, abs=1e-4)
     assert m["on_time_rate"] == pytest.approx(1.0)
     assert m["unassigned_order_count"] == 0
-    assert m["solve_time_sec"] is None                          # 未传 → null
+    assert m["solve_time_sec"] == 0.0                           # v1.1：缺失按 0 计
+    assert any("solve_time_sec" in w for w in out.get("warnings", []))  # 且带标注
     assert len(out["per_route"]) == 1
     assert out["per_route"][0]["load_rate_weight"] == pytest.approx(0.8)
 

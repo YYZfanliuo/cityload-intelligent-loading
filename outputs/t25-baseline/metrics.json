@@ -1,0 +1,100 @@
+{
+  "scenario": "pharmacy_chain",
+  "seed": 42,
+  "metrics": {
+    "vehicle_count": 7,
+    "total_distance_km": 565.33,
+    "total_cost": 3190.63,
+    "avg_weight_load_rate": 0.5377,
+    "avg_volume_utilization": 0.1083,
+    "on_time_rate": 0.8667,
+    "unassigned_order_count": 2,
+    "solve_time_sec": 0.714464,
+    "peak_memory_mb": 79.082,
+    "total_item_count": 3656,
+    "placed_item_count": 2759,
+    "unplaced_item_count": 897
+  },
+  "per_route": [
+    {
+      "route_id": "R01",
+      "vehicle_type": "V01",
+      "stop_count": 9,
+      "distance_km": 106.48,
+      "total_load_kg": 1654.28,
+      "load_rate_weight": 0.9731,
+      "cost": 893.33,
+      "on_time_stops": 8,
+      "volume_utilization": 0.1417
+    },
+    {
+      "route_id": "R02",
+      "vehicle_type": "V01",
+      "stop_count": 3,
+      "distance_km": 36.27,
+      "total_load_kg": 588.89,
+      "load_rate_weight": 0.3464,
+      "cost": 246.95,
+      "on_time_stops": 3,
+      "volume_utilization": 0.0912
+    },
+    {
+      "route_id": "R03",
+      "vehicle_type": "V01",
+      "stop_count": 3,
+      "distance_km": 58.02,
+      "total_load_kg": 632.2,
+      "load_rate_weight": 0.3719,
+      "cost": 323.06,
+      "on_time_stops": 3,
+      "volume_utilization": 0.0713
+    },
+    {
+      "route_id": "R04",
+      "vehicle_type": "V01",
+      "stop_count": 5,
+      "distance_km": 133.09,
+      "total_load_kg": 1033.27,
+      "load_rate_weight": 0.6078,
+      "cost": 585.83,
+      "on_time_stops": 5,
+      "volume_utilization": 0.0984
+    },
+    {
+      "route_id": "R05",
+      "vehicle_type": "V02",
+      "stop_count": 2,
+      "distance_km": 54.12,
+      "total_load_kg": 351.2,
+      "load_rate_weight": 0.3512,
+      "cost": 231.55,
+      "on_time_stops": 2,
+      "volume_utilization": 0.1162
+    },
+    {
+      "route_id": "R06",
+      "vehicle_type": "V02",
+      "stop_count": 3,
+      "distance_km": 87.71,
+      "total_load_kg": 500.44,
+      "load_rate_weight": 0.5004,
+      "cost": 325.6,
+      "on_time_stops": 3,
+      "volume_utilization": 0.125
+    },
+    {
+      "route_id": "R07",
+      "vehicle_type": "V02",
+      "stop_count": 3,
+      "distance_km": 89.62,
+      "total_load_kg": 613.19,
+      "load_rate_weight": 0.6132,
+      "cost": 584.32,
+      "on_time_stops": 2,
+      "volume_utilization": 0.1143
+    }
+  ],
+  "warnings": [
+    "未装载 897 件；请查看 packing.json、routes.json 与装载指引中的提醒"
+  ]
+}

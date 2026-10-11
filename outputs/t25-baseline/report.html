@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>智载 CityLoad —— 城市配送智能配载方案（单页报告）</title>
+<style>
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: #f4f6fa;
+    color: #1f2937;
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 22px; }
+
+  /* ---------- 头部 ---------- */
+  .hero {
+    background: linear-gradient(135deg, #123a7d 0%, #1d63d8 100%);
+    color: #ffffff;
+    padding: 36px 0 30px;
+  }
+  .hero .eyebrow { margin: 0; font-size: 12.5px; letter-spacing: 2px; opacity: .88; }
+  .hero h1 { margin: 8px 0 10px; font-size: 30px; line-height: 1.35; letter-spacing: .5px; }
+  .hero .sub { margin: 0; font-size: 14px; opacity: .93; }
+
+  /* ---------- 通用卡片 ---------- */
+  main { padding-bottom: 8px; }
+  .card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 22px 26px 24px;
+    margin: 22px 0;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .05);
+  }
+  .card h2 {
+    font-size: 19px;
+    margin: 0 0 14px;
+    padding-left: 12px;
+    border-left: 4px solid #1d63d8;
+    line-height: 1.4;
+  }
+  .card h3 { font-size: 16.5px; margin: 0 0 6px; }
+  .muted { color: #64748b; font-size: 13px; }
+
+  /* ---------- KPI 卡片 ---------- */
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 14px;
+    margin: 12px 0 4px;
+  }
+  .kpi {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .kpi .v { font-size: 26px; font-weight: 700; color: #0f4bb8; line-height: 1.3; }
+  .kpi .v small { font-size: 14px; font-weight: 600; color: #334155; }
+  .kpi .l { font-size: 13px; color: #64748b; margin-top: 2px; }
+  .perf { color: #64748b; font-size: 13px; margin: 10px 0 2px; }
+
+  /* ---------- 图件 ---------- */
+  figure { margin: 0 0 16px; }
+  figure img {
+    width: 100%; height: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #ffffff;
+    display: block;
+  }
+  figcaption { font-size: 13px; color: #64748b; margin-top: 6px; text-align: center; }
+
+  .vehicle {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px 18px 10px;
+    margin: 16px 0;
+    background: #fcfdff;
+  }
+  .vehicle .tag {
+    font-size: 12px;
+    color: #0f4bb8;
+    background: #e8f0fe;
+    border-radius: 999px;
+    padding: 2px 10px;
+    margin-left: 8px;
+    vertical-align: 2px;
+    white-space: nowrap;
+  }
+  .vehicle .vmeta { font-size: 13px; color: #64748b; margin: 2px 0 10px; }
+  .guide-text {
+    background: #f8fafc;
+    border-left: 3px solid #93c5fd;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 16px;
+    margin: 12px 0 14px;
+    font-size: 14px;
+  }
+  .guide-text p { margin: 6px 0; }
+  .steps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 12px;
+    margin-top: 8px;
+  }
+  .steps-grid figure { margin-bottom: 8px; }
+
+  /* ---------- 表格 ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 6px 0 4px; }
+  th, td { border-bottom: 1px solid #e5e7eb; padding: 9px 10px; text-align: left; }
+  th { background: #f1f5f9; font-weight: 600; color: #334155; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:hover td { background: #f8fafc; }
+  .better { color: #15803d; font-weight: 600; }
+  .worse { color: #b91c1c; font-weight: 600; }
+
+  /* ---------- 提示与说明 ---------- */
+  .warn {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #9a3412;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin: 18px 0 0;
+    font-size: 14px;
+  }
+  .notes ul { padding-left: 20px; margin: 8px 0; }
+  .notes li, .notes p { font-size: 14px; color: #334155; }
+  .placeholder {
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    padding: 24px;
+    color: #94a3b8;
+    text-align: center;
+    font-size: 14px;
+  }
+  .foot { color: #64748b; font-size: 13px; text-align: center; padding: 10px 22px 44px; }
+  .foot p { margin: 4px 0; }
+
+  @media (max-width: 640px) {
+    .hero h1 { font-size: 23px; }
+    .card { padding: 18px 16px; }
+    .kpi .v { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">TRACK 02 · AI＋物流 · 城市配送智能配载</p>
+    <h1>智载 CityLoad —— 城市配送智能配载方案</h1>
+    <p class="sub">场景：城市连锁药店配送（中心仓 → 门店） ｜ seed=42 ｜ 32 张图件 ｜ 生成时间 2026-10-11 20:50</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="warn">注意：有 2 个订单未分配（O0024、O0029），详见 routes.json 的 unassigned_orders。</div><div class="warn">注意：有 897 件货物因装载约束未能装入车厢（已装 2759/3656 件），详见 packing.json 的 unplaced 字段。</div>
+
+  <section class="card">
+    <h2>1 · 场景说明</h2>
+    <p>场景：<b>单一中心仓 → 28 家连锁药店</b>的城市配送。订单由固定种子（seed=42）的模拟数据生成器产出，全链路可复现。</p><p>求解流程：多约束路径规划（CVRPTW：载重 + 时间窗）→ 3D 装箱（重不压轻、易碎置顶、堆叠层数约束）→ 按配送顺序倒序装载（后送先装）→ 分步装卸指引与可视化报告。</p><p>本页方案：<b>7 条配送路线 / 7 辆车次</b>。装载结果见下方各车厢 3D 图与分步指引。</p>
+  </section>
+
+  <section class="card">
+    <h2>2 · 核心指标</h2>
+    <p class="perf">求解耗时 0.71 s · 峰值内存 79.1 MB · 平均体积利用率 10.8% · 货物装载 2759/3656 件（装下率 75.5%） · 未分配订单 2 个</p>
+    <div class="kpis"><div class="kpi"><div class="v">7<small> 辆</small></div><div class="l">车辆数（车次）</div></div><div class="kpi"><div class="v">565.3<small> km</small></div><div class="l">总里程</div></div><div class="kpi"><div class="v">¥3190.63</div><div class="l">总成本</div></div><div class="kpi"><div class="v">53.8%</div><div class="l">平均载重装载率</div></div><div class="kpi"><div class="v">86.7%</div><div class="l">时效达成率</div></div></div>
+  </section>
+
+  <section class="card">
+    <h2>3 · 配送路线图</h2>
+    <figure><img src="figures/route_map.png" alt="配送路线图"><figcaption>配送路线图：不同颜色为不同车次路线，★ 为中心仓，× 为未分配门店。</figcaption></figure>
+  </section>
+
+  <section class="card">
+    <h2>4 · 车厢 3D 装载方案</h2>
+    <p class="muted">每辆车厢的 3D 装箱结果（半透明立方体为货物，按门店着色；坐标原点位于车厢左下后角，x 向车头）。</p>
+    <figure><img src="figures/packing_V01.png" alt="R01-1 3D 装载图" loading="lazy"><figcaption>R01-1 车厢 3D 装载图</figcaption></figure><figure><img src="figures/packing_V02.png" alt="R02-1 3D 装载图" loading="lazy"><figcaption>R02-1 车厢 3D 装载图</figcaption></figure><figure><img src="figures/packing_V03.png" alt="R03-1 3D 装载图" loading="lazy"><figcaption>R03-1 车厢 3D 装载图</figcaption></figure><figure><img src="figures/packing_V04.png" alt="R04-1 3D 装载图" loading="lazy"><figcaption>R04-1 车厢 3D 装载图</figcaption></figure><figure><img src="figures/packing_V05.png" alt="R05-1 3D 装载图" loading="lazy"><figcaption>R05-1 车厢 3D 装载图</figcaption></figure><figure><img src="figures/packing_V06.png" alt="R06-1 3D 装载图" loading="lazy"><figcaption>R06-1 车厢 3D 装载图</figcaption></figure><figure><img src="figures/packing_V07.png" alt="R07-1 3D 装载图" loading="lazy"><figcaption>R07-1 车厢 3D 装载图</figcaption></figure>
+  </section>
+
+  <section class="card">
+    <h2>5 · 分步装卸指引</h2>
+    <p class="muted">按“后送先装”顺序生成的分步骤装载示意与文字指引，供现场装卸人员对照执行。</p>
+    <article class="vehicle"><h3>车辆 1 · R01-1<span class="tag">车型 V01</span></h3><p class="vmeta">9 个门店 · 里程 106.5 km · 成本 ¥893.33 · 载重装载率 97.3%</p><div class="guide-text"><p>第 1 步：将 S03（连锁药店03）的 138 件货物装入车厢最内侧靠车头位置。<br>第 2 步：将 S04（连锁药店04）的 135 件货物装入紧靠前批货物的外侧位置。<br>第 3 步：将 S08（连锁药店08）的 145 件货物装入紧靠前批货物的外侧位置。<br>第 4 步：将 S12（连锁药店12）的 101 件货物装入紧靠前批货物的外侧位置。<br>第 5 步：将 S16（连锁药店16）的 20 件货物装入紧靠前批货物的外侧位置。<br>第 6 步：将 S18（连锁药店18）的 29 件货物装入紧靠前批货物的外侧位置。<br>第 7 步：将 S21（连锁药店21）的 42 件货物装入紧靠前批货物的外侧位置。<br>第 8 步：将 S25（连锁药店25）的 58 件货物装入紧靠前批货物的外侧位置。<br>第 9 步：将 S26（连锁药店26）的 7 件货物装入车厢门口（车尾）位置。<br>装载提醒（共 23 条）：<br>1. S03被后送S16阻挡（上下压，32对），需搬移货物。<br>2. S03被后送S16阻挡（车尾通道，8对），需搬移货物。<br>3. S04被后送S08阻挡（上下压，12对），需搬移货物。<br>4. S04被后送S12阻挡（上下压，4对），需搬移货物。<br>5. S04被后送S12阻挡（车尾通道，4对），需搬移货物。<br>6. S04被后送S16阻挡（上下压，22对），需搬移货物。<br>7. S04被后送S16阻挡（车尾通道，73对），需搬移货物。<br>8. S08被后送S12阻挡（上下压，12对），需搬移货物。<br>9. S08被后送S12阻挡（车尾通道，63对），需搬移货物。<br>10. S08被后送S16阻挡（上下压，4对），需搬移货物。<br>11. S08被后送S16阻挡（车尾通道，40对），需搬移货物。<br>12. S08被后送S25阻挡（上下压，7对），需搬移货物。<br>13. S08被后送S25阻挡（车尾通道，6对），需搬移货物。<br>14. S12被后送S16阻挡（上下压，13对），需搬移货物。<br>15. S12被后送S16阻挡（车尾通道，15对），需搬移货物。<br>16. S12被后送S18阻挡（上下压，11对），需搬移货物。<br>17. S12被后送S18阻挡（车尾通道，9对），需搬移货物。<br>18. S12被后送S21阻挡（上下压，6对），需搬移货物。<br>19. S12被后送S21阻挡（车尾通道，9对），需搬移货物。<br>20. S16被后送S18阻挡（上下压，1对），需搬移货物。<br>21. S18被后送S21阻挡（上下压，20对），需搬移货物。<br>22. S18被后送S21阻挡（车尾通道，13对），需搬移货物。<br>23. S25被后送S26阻挡（上下压，5对），需搬移货物。<br>未装载 463 件，不包含在上述装载步骤中，需另行安排配送。</p></div><div class="steps-grid"><figure><img src="figures/step_V01_1.png" alt="分步装载示意（第 1 张）" loading="lazy"><figcaption>分步示意 1</figcaption></figure><figure><img src="figures/step_V01_2.png" alt="分步装载示意（第 2 张）" loading="lazy"><figcaption>分步示意 2</figcaption></figure><figure><img src="figures/step_V01_3.png" alt="分步装载示意（第 3 张）" loading="lazy"><figcaption>分步示意 3</figcaption></figure><figure><img src="figures/step_V01_4.png" alt="分步装载示意（第 4 张）" loading="lazy"><figcaption>分步示意 4</figcaption></figure><figure><img src="figures/step_V01_5.png" alt="分步装载示意（第 5 张）" loading="lazy"><figcaption>分步示意 5</figcaption></figure></div></article><article class="vehicle"><h3>车辆 2 · R02-1<span class="tag">车型 V01</span></h3><p class="vmeta">3 个门店 · 里程 36.3 km · 成本 ¥246.95 · 载重装载率 34.6%</p><div class="guide-text"><p>第 1 步：将 S01（连锁药店01）的 123 件货物装入车厢最内侧靠车头位置。<br>第 2 步：将 S06（连锁药店06）的 47 件货物装入紧靠前批货物的外侧位置。<br>第 3 步：将 S30（连锁药店30）的 153 件货物装入车厢门口（车尾）位置。<br>装载提醒（共 5 条）：<br>1. S01被后送S06阻挡（上下压，5对），需搬移货物。<br>2. S01被后送S30阻挡（上下压，19对），需搬移货物。<br>3. S01被后送S30阻挡（车尾通道，46对），需搬移货物。<br>4. S06被后送S30阻挡（上下压，9对），需搬移货物。<br>5. S06被后送S30阻挡（车尾通道，30对），需搬移货物。</p></div><div class="steps-grid"><figure><img src="figures/step_V02_1.png" alt="分步装载示意（第 1 张）" loading="lazy"><figcaption>分步示意 1</figcaption></figure><figure><img src="figures/step_V02_2.png" alt="分步装载示意（第 2 张）" loading="lazy"><figcaption>分步示意 2</figcaption></figure><figure><img src="figures/step_V02_3.png" alt="分步装载示意（第 3 张）" loading="lazy"><figcaption>分步示意 3</figcaption></figure></div></article><article class="vehicle"><h3>车辆 3 · R03-1<span class="tag">车型 V01</span></h3><p class="vmeta">3 个门店 · 里程 58.0 km · 成本 ¥323.06 · 载重装载率 37.2%</p><div class="guide-text"><p>第 1 步：将 S02（连锁药店02）的 148 件货物装入车厢最内侧靠车头位置。<br>第 2 步：将 S07（连锁药店07）的 82 件货物装入紧靠前批货物的外侧位置。<br>第 3 步：将 S11（连锁药店11）的 106 件货物装入车厢门口（车尾）位置。<br>装载提醒（共 6 条）：<br>1. S02被后送S07阻挡（上下压，14对），需搬移货物。<br>2. S02被后送S07阻挡（车尾通道，3对），需搬移货物。<br>3. S02被后送S11阻挡（上下压，19对），需搬移货物。<br>4. S02被后送S11阻挡（车尾通道，2对），需搬移货物。<br>5. S07被后送S11阻挡（上下压，18对），需搬移货物。<br>6. S07被后送S11阻挡（车尾通道，12对），需搬移货物。</p></div><div class="steps-grid"><figure><img src="figures/step_V03_1.png" alt="分步装载示意（第 1 张）" loading="lazy"><figcaption>分步示意 1</figcaption></figure><figure><img src="figures/step_V03_2.png" alt="分步装载示意（第 2 张）" loading="lazy"><figcaption>分步示意 2</figcaption></figure><figure><img src="figures/step_V03_3.png" alt="分步装载示意（第 3 张）" loading="lazy"><figcaption>分步示意 3</figcaption></figure></div></article><article class="vehicle"><h3>车辆 4 · R04-1<span class="tag">车型 V01</span></h3><p class="vmeta">5 个门店 · 里程 133.1 km · 成本 ¥585.83 · 载重装载率 60.8%</p><div class="guide-text"><p>第 1 步：将 S13（连锁药店13）的 158 件货物装入车厢最内侧靠车头位置。<br>第 2 步：将 S17（连锁药店17）的 47 件货物装入紧靠前批货物的外侧位置。<br>第 3 步：将 S20（连锁药店20）的 172 件货物装入紧靠前批货物的外侧位置。<br>第 4 步：将 S22（连锁药店22）的 37 件货物装入紧靠前批货物的外侧位置。<br>第 5 步：将 S27（连锁药店27）的 42 件货物装入车厢门口（车尾）位置。<br>装载提醒（共 6 条）：<br>1. S13被后送S17阻挡（上下压，14对），需搬移货物。<br>2. S13被后送S17阻挡（车尾通道，4对），需搬移货物。<br>3. S17被后送S20阻挡（上下压，12对），需搬移货物。<br>4. S17被后送S20阻挡（车尾通道，31对），需搬移货物。<br>5. S20被后送S22阻挡（上下压，14对），需搬移货物。<br>6. S22被后送S27阻挡（上下压，15对），需搬移货物。<br>未装载 170 件，不包含在上述装载步骤中，需另行安排配送。</p></div><div class="steps-grid"><figure><img src="figures/step_V04_1.png" alt="分步装载示意（第 1 张）" loading="lazy"><figcaption>分步示意 1</figcaption></figure><figure><img src="figures/step_V04_2.png" alt="分步装载示意（第 2 张）" loading="lazy"><figcaption>分步示意 2</figcaption></figure><figure><img src="figures/step_V04_3.png" alt="分步装载示意（第 3 张）" loading="lazy"><figcaption>分步示意 3</figcaption></figure><figure><img src="figures/step_V04_4.png" alt="分步装载示意（第 4 张）" loading="lazy"><figcaption>分步示意 4</figcaption></figure><figure><img src="figures/step_V04_5.png" alt="分步装载示意（第 5 张）" loading="lazy"><figcaption>分步示意 5</figcaption></figure></div></article><article class="vehicle"><h3>车辆 5 · R05-1<span class="tag">车型 V02</span></h3><p class="vmeta">2 个门店 · 里程 54.1 km · 成本 ¥231.55 · 载重装载率 35.1%</p><div class="guide-text"><p>第 1 步：将 S05（连锁药店05）的 146 件货物装入车厢最内侧靠车头位置。<br>第 2 步：将 S14（连锁药店14）的 75 件货物装入车厢门口（车尾）位置。<br>装载提醒（共 2 条）：<br>1. S05被后送S14阻挡（上下压，36对），需搬移货物。<br>2. S05被后送S14阻挡（车尾通道，32对），需搬移货物。</p></div><div class="steps-grid"><figure><img src="figures/step_V05_1.png" alt="分步装载示意（第 1 张）" loading="lazy"><figcaption>分步示意 1</figcaption></figure><figure><img src="figures/step_V05_2.png" alt="分步装载示意（第 2 张）" loading="lazy"><figcaption>分步示意 2</figcaption></figure></div></article><article class="vehicle"><h3>车辆 6 · R06-1<span class="tag">车型 V02</span></h3><p class="vmeta">3 个门店 · 里程 87.7 km · 成本 ¥325.60 · 载重装载率 50.0%</p><div class="guide-text"><p>第 1 步：将 S10（连锁药店10）的 127 件货物装入车厢最内侧靠车头位置。<br>第 2 步：将 S15（连锁药店15）的 114 件货物装入紧靠前批货物的外侧位置。<br>第 3 步：将 S23（连锁药店23）的 100 件货物装入车厢门口（车尾）位置。<br>装载提醒（共 5 条）：<br>1. S10被后送S15阻挡（上下压，12对），需搬移货物。<br>2. S10被后送S23阻挡（上下压，7对），需搬移货物。<br>3. S10被后送S23阻挡（车尾通道，8对），需搬移货物。<br>4. S15被后送S23阻挡（上下压，32对），需搬移货物。<br>5. S15被后送S23阻挡（车尾通道，36对），需搬移货物。</p></div><div class="steps-grid"><figure><img src="figures/step_V06_1.png" alt="分步装载示意（第 1 张）" loading="lazy"><figcaption>分步示意 1</figcaption></figure><figure><img src="figures/step_V06_2.png" alt="分步装载示意（第 2 张）" loading="lazy"><figcaption>分步示意 2</figcaption></figure><figure><img src="figures/step_V06_3.png" alt="分步装载示意（第 3 张）" loading="lazy"><figcaption>分步示意 3</figcaption></figure></div></article><article class="vehicle"><h3>车辆 7 · R07-1<span class="tag">车型 V02</span></h3><p class="vmeta">3 个门店 · 里程 89.6 km · 成本 ¥584.32 · 载重装载率 61.3%</p><div class="guide-text"><p>第 1 步：将 S09（连锁药店09）的 171 件货物装入车厢最内侧靠车头位置。<br>第 2 步：将 S19（连锁药店19）的 101 件货物装入紧靠前批货物的外侧位置。<br>第 3 步：将 S28（连锁药店28）的 135 件货物装入车厢门口（车尾）位置。<br>装载提醒（共 2 条）：<br>1. S09被后送S19阻挡（上下压，4对），需搬移货物。<br>2. S19被后送S28阻挡（上下压，2对），需搬移货物。<br>未装载 30 件，不包含在上述装载步骤中，需另行安排配送。</p></div><div class="steps-grid"><figure><img src="figures/step_V07_1.png" alt="分步装载示意（第 1 张）" loading="lazy"><figcaption>分步示意 1</figcaption></figure><figure><img src="figures/step_V07_2.png" alt="分步装载示意（第 2 张）" loading="lazy"><figcaption>分步示意 2</figcaption></figure><figure><img src="figures/step_V07_3.png" alt="分步装载示意（第 3 张）" loading="lazy"><figcaption>分步示意 3</figcaption></figure></div></article>
+  </section>
+
+  
+
+  <section class="card notes">
+    <h2>6 · 数据来源与说明</h2>
+    <ul><li>数据来源：模拟数据集（seed=42，单一中心仓 + 连锁药店场景），由 data/gen_data.py 生成、data/validate.py 校验，字节级可复现；不含任何真实企业数据。</li><li>求解与评估：路径规划为 OR-Tools CVRPTW；装箱为 3D 启发式（重不压轻、易碎置顶）；全部指标由 eval/metrics.py 计算，与本报告数字同源。</li><li>图件生成：matplotlib 静态渲染（route_map / packing_V* / step_V*）；本页为离线单页 HTML（内联 CSS、无外部 CDN、无脚本）。</li><li>求解性能（本机实测）：求解耗时 0.71 秒、峰值内存 79.1 MB、未分配订单 2 个（含罚金，见 routes.json）。</li></ul><p><b>限制说明</b></p><ul><li>本报告为算法输出的静态快照，非实时调度系统；未接入实时路况与突发订单。</li><li>时间窗遵守基于平均车速估算，未模拟随机延误；实际执行请预留缓冲。</li><li>3D 装载图为自动装箱结果的示意，不替代现场装卸安全规范。</li><li>当前范围未覆盖多仓协同、冷链温控、退货回收等衍生场景（见 README 限制章节）。</li></ul>
+  </section>
+</main>
+
+<footer class="foot">
+  <p>智载 CityLoad · 城市配送智能配载与调度系统 · AI 重构产业架构师大赛（TRACK 02）</p>
+  <p>本报告为静态离线页面：无外部 CDN 依赖、无脚本，可直接用浏览器打开或随仓库分发。</p>
+</footer>
+
+</body>
+</html>
