@@ -1,7 +1,7 @@
 # 测试记录与边界 case 清单（T33）
 
-> **状态**：进行中 —— 窗口B 负责汇总。E 侧补测与 3 项边界补测已完成；待 C 定稿后刷新快照并定稿。
-> **最后更新**：2026-10-11 19:35（窗口B：边界补测 #2——超载/易碎堆叠/运力不足 预跑全绿）
+> **状态**：进行中 —— 窗口B 负责汇总。E 侧补测与 3 项边界补测已完成；待 T31 完成后刷新快照并定稿。
+> **最后更新**：2026-10-11 19:55（窗口B：体检预跑快照 aa6a91a——122 通过/1 跳过/0 失败）
 
 ---
 
@@ -46,34 +46,40 @@ tests/test_metrics.py::test_smoke_with_real_dataset PASSED                      
 | 双组差异 | seed 42 vs seed 7 | 行数 328/318、件数 3656/3751、坐标 0 重合 |
 | 总量健康 | 多 seed 统计总重占比 | 57.2%–58.4%，全部落在 55%–75% 要求内 |
 
-### 1.3 全量单测快照（提交版本 `5498ae5`，窗口B 统一执行）✅
+### 1.3 全量单测快照（窗口B 统一执行）✅
 
-> 运行口径：从 dev 分支提交版本 `5498ae5` 导出**干净工作树快照**后运行全量测试，
+> 运行口径：从 dev 分支提交版本导出**干净工作树快照**后运行全量测试，
 > 与各窗口进行中的未提交修改相互隔离（可复现：commit hash + 下述命令）。
 
 ```bash
-git worktree add <tmpdir> 5498ae5 && cd <tmpdir>
+git worktree add <tmpdir> <commit> && cd <tmpdir>
 python -m pytest tests/ -v --tb=line
 ```
 
-结果：**82 项收集，81 通过 + 1 跳过（0 失败）**
+**最新快照：commit `aa6a91a`（2026-10-11 19:50 体检预跑）—— 123 项收集，122 通过 + 1 跳过，0 失败**
 
 | 测试文件 | 通过 | 跳过 | 归属 |
 |----------|------|------|------|
-| test_build_html.py | 5 | 0 | 窗口E |
+| test_baseline.py | 4 | 0 | 窗口C |
+| test_build_html.py | 6 | 0 | 窗口E |
+| test_edge_cases.py | 4 | 0 | 窗口B |
 | test_explainer.py | 19 | 1 | 窗口D |
 | test_metrics.py | 5 | 0 | 窗口B |
-| test_packing.py | 32 | 0 | 窗口C |
+| test_packing.py | 37 | 0 | 窗口C |
 | test_parser.py | 14 | 0 | 窗口D |
-| test_render.py | 4 | 0 | 窗口E |
-| test_routing.py | 2 | 0 | 窗口C |
-| **合计** | **81** | **1** | — |
+| test_render.py | 6 | 0 | 窗口E |
+| test_routing.py | 12 | 0 | 窗口C |
+| test_run.py | 2 | 0 | 窗口C/E |
+| test_sequencing.py | 13 | 0 | 窗口C |
+| **合计** | **122** | **1** | — |
 
 - 跳过项：`test_explainer.py::test_real_pipeline_integration`（设计性跳过：待 solver 定稿后启用真实管线集成）。
 - ⚠️ **已知风险用例备注**（主规划 19:10 通报 + 窗口B 观测）：`test_routing_is_deterministic`
   存在**偶发失败**风险 —— OR-Tools 的 `time_limit` 求解结果受 CPU 负载影响，
-  同一输入两次求解可能落在不同局部最优。窗口B 3 次运行中该用例均通过；
+  同一输入两次求解可能落在不同局部最优。多轮快照中该用例均通过；
   T31 对比实验复跑时如遇失败，需重试并如实记录。
+- 历史快照：`5498ae5`（19:05）— 82 项 = 81 通过 + 1 跳过（较上轮本轮 +41 项，新增
+  test_sequencing / test_baseline / test_run / test_edge_cases 四个测试文件）。
 
 ### 1.4 窗口E 模块补测（T33 补测项 #1）✅
 
