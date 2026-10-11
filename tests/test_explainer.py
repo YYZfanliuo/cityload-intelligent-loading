@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -325,6 +326,17 @@ def _check_pipeline_set(name: str, plan_path: Path, routes_path: Path) -> None:
         positions = [p for p in (body.find(s) for s in rev) if p >= 0]
         assert positions == sorted(positions), f"{name}/{vi}: 门店装载顺序与 delivery_order 倒序不一致"
 
+        # 提醒区新格式核对：汇总条数 = 编号行数，且编号 1..N 连续
+        m = re.search(r"装载提醒（共 (\d+) 条）：", text)
+        if m:
+            n = int(m.group(1))
+            numbered = [
+                ln for ln in text.split("装载提醒", 1)[1].splitlines() if re.match(r"^\d+\. ", ln)
+            ]
+            assert len(numbered) == n, f"{name}/{vi}: 汇总 {n} 条 != 编号行 {len(numbered)} 个"
+            seq = [int(ln.split(".", 1)[0]) for ln in numbered]
+            assert seq == list(range(1, n + 1)), f"{name}/{vi}: 提醒编号不连续"
+
 
 def test_real_pipeline_integration():
     """真实链路集成测试：自动发现 output/ 与 outputs/ 下的全部数据集逐一校验。"""
@@ -333,6 +345,35 @@ def test_real_pipeline_integration():
         pytest.skip("等待窗口C 产出 output(s)/*_loading_plan.json + *_routes.json 后自动激活")
     for name, plan_path, routes_path in pipeline_sets:
         _check_pipeline_set(name, plan_path, routes_path)
+
+
+def test_artifacts_bytewise_consistency():
+    """产物逐字节复核（默认 skip；数据重跑后的最终复核用）。
+
+    运行方式：CITYLOAD_REVIEW_ARTIFACTS=1 pytest tests/test_explainer.py -k bytewise -v
+    校验 outputs/{seed}_guide_text.json（或 output/guide_text.json）与
+    gen_guide_text 当前函数重跑结果是否逐字节一致（产物与代码同步守卫）。
+    """
+    if os.environ.get("CITYLOAD_REVIEW_ARTIFACTS", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        pytest.skip("设置 CITYLOAD_REVIEW_ARTIFACTS=1 后执行产物逐字节复核")
+
+    checked = 0
+    for name, plan_path, routes_path in _discover_pipeline_sets():
+        if plan_path.name == "loading_plan.json":
+            prod_path = plan_path.parent / "guide_text.json"
+        else:
+            seed = plan_path.name[: -len("_loading_plan.json")]
+            prod_path = plan_path.parent / f"{seed}_guide_text.json"
+        if not prod_path.exists():
+            continue
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        routes = json.loads(routes_path.read_text(encoding="utf-8"))
+        prod = json.loads(prod_path.read_text(encoding="utf-8"))
+        rerun = gen_guide_text(plan, routes)
+        assert prod == rerun, f"{name}: 产物 {prod_path.name} 与 gen_guide_text 重跑不一致"
+        checked += 1
+    if checked == 0:
+        pytest.fail("未发现任何 guide_text 产物，无法逐字节复核")
 
 
 # ---------------------------------------------------------------------------
