@@ -5,10 +5,14 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+.pytest_cache/
 
-# ---- 运行产物 ----
-# 忽略目录中的大图（PNG），保留 report.html 与 JSON 结果
-output/figures/*.png
+# ---- 运行产物（契约 v1.4）----
+# 输出统一放 outputs/：report.html、JSON、figures/*.png 图件均须入库供评审查看，
+# 不得对 outputs/ 下任何文件设置忽略规则。
+#
+# 旧口径 output/ 已废弃（残留目录防误提交；物理删除后可移除本规则）
+output/
 
 # ---- 工具与 IDE ----
 .workbuddy/

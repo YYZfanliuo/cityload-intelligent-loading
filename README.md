@@ -33,10 +33,10 @@
 pip install -r requirements.txt
 
 # 一键跑通全流程（求解 → 装箱 → 装载排序 → 指标 → 图表 → HTML 报告）
-python run.py --data data/ --out output/
+python run.py --data data/ --out outputs/
 
 # 可选：同时运行贪心 baseline 对比
-python run.py --data data/ --out output/ --baseline
+python run.py --data data/ --out outputs/ --baseline
 ```
 
 ## 七、实验结果
