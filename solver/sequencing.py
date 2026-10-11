@@ -75,10 +75,55 @@ def sequence_loading(packing: dict, routes: dict, rules: dict) -> dict:
             mirrored_blocks = _blocks(mirrored, ranks)
             # 浮点镜像可能将接触面变成极小正相交；严格检查后才采用。
             geometry_safe = True
+            gap = max(0.0, float(rules.get("packing", {}).get("gap_cm", 0.0)))
             for i, box in enumerate(mirrored):
-                for other in mirrored[i + 1:]:
+                p, d = box["position_cm"], box["size_placed_cm"]
+                if p["x"] < left or p["x"] + d["l"] > right:
+                    geometry_safe = False
+                    break
+                if p["z"] > 0 and not any(
+                        base is not box and
+                        base["position_cm"]["z"] + base["size_placed_cm"]["h"] == p["z"] and
+                        all(base["position_cm"][a] <= p[a] and
+                            p[a] + d[s] <= base["position_cm"][a] + base["size_placed_cm"][s]
+                            for a, s in (("x", "l"), ("y", "w")))
+                        for base in mirrored):
+                    geometry_safe = False
+                    break
+                for j, other in enumerate(mirrored):
+                    if i == j:
+                        continue
+                    old, old_other = placed[i], placed[j]
+                    op, od = other["position_cm"], other["size_placed_cm"]
+                    old_p, old_d = old["position_cm"], old["size_placed_cm"]
+                    old_op, old_od = old_other["position_cm"], old_other["size_placed_cm"]
                     if all(_strict_overlap(box, other, axis, side)
                            for axis, side in zip("xyz", "lwh")):
+                        geometry_safe = False
+                        break
+                    # 保留原支撑箱关系，严格拒绝镜像舍入导致的微小悬空。
+                    supported = (old_p["z"] > 0 and
+                                 old_op["z"] + old_od["h"] == old_p["z"] and
+                                 all(old_op[a] <= old_p[a] and
+                                     old_p[a] + old_d[s] <= old_op[a] + old_od[s]
+                                     for a, s in (("x", "l"), ("y", "w"))))
+                    if supported and not (op["x"] <= p["x"] and
+                                          p["x"] + d["l"] <= op["x"] + od["l"]):
+                        geometry_safe = False
+                        break
+                    # 新增足迹相交可能令易碎件承压，即使三维箱体并未重叠。
+                    if (not _strict_overlap(old, old_other, "x", "l") and
+                            _strict_overlap(box, other, "x", "l") and
+                            _strict_overlap(box, other, "y", "w")):
+                        geometry_safe = False
+                        break
+                    old_gap = max(old_op["x"] - old_p["x"] - old_d["l"],
+                                  old_p["x"] - old_op["x"] - old_od["l"])
+                    new_gap = max(op["x"] - p["x"] - d["l"],
+                                  p["x"] - op["x"] - od["l"])
+                    if (gap > 0 and old_gap >= gap and
+                            _strict_overlap(box, other, "y", "w") and
+                            _strict_overlap(box, other, "z", "h") and new_gap < gap):
                         geometry_safe = False
                         break
                 if not geometry_safe:

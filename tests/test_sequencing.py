@@ -102,6 +102,39 @@ def test_x_mirror_repairs_reversed_channel_and_preserves_support_and_dimensions(
         assert before["layer"] == after["layer"]
 
 
+def test_repeated_sequence_is_idempotent_and_cloned_inputs_are_isolated():
+    source = {"vehicles": [vehicle([box("S02"), box("S01", x=10)])]}
+    routes = {"routes": [route(stores=("S01", "S02"))]}
+    snapshot = deepcopy((source, routes))
+    first, second = deepcopy(source), deepcopy(source)
+    result = sequence_loading(first, routes, {})
+    assert first != source  # 保留生产接口的就地修复行为。
+    assert sequence_loading(first, routes, {}) == result
+    assert sequence_loading(second, routes, {}) == result
+    assert first == second
+    assert (source, routes) == snapshot
+    first["vehicles"][0]["placed"][0]["position_cm"]["x"] = 999
+    assert first != second and (source, routes) == snapshot
+
+
+def test_float_mirror_rejects_loss_of_strict_complete_support():
+    x, length, width = 5.592453147881197, 8.37739611104678, 1.4497063821020266
+    placed = [box("S02", x=x, l=length), box("S02", x=x, z=10, l=width),
+              box("S01", x=x + length + 1)]
+    original = deepcopy(placed)
+    mirrored = deepcopy(placed)
+    right = x + length + 11
+    for candidate in mirrored:
+        candidate["position_cm"]["x"] = x + right - candidate["position_cm"]["x"] - candidate["size_placed_cm"]["l"]
+    assert all(x <= b["position_cm"]["x"] and
+               b["position_cm"]["x"] + b["size_placed_cm"]["l"] <= right for b in mirrored)
+    assert mirrored[2]["position_cm"]["x"] + 10 <= mirrored[0]["position_cm"]["x"]
+    assert mirrored[1]["position_cm"]["x"] + width > mirrored[0]["position_cm"]["x"] + length
+    result = plan(placed, ("S01", "S02"))
+    assert placed == original
+    assert any("车尾通道" in warning for warning in result["blocks_warning"])
+
+
 def test_conflicting_channel_directions_cannot_be_cleared_by_whole_mirror():
     placed = [box("S01", x=10), box("S02", x=0),
               box("S01", x=0, y=20), box("S02", x=10, y=20)]
@@ -142,6 +175,8 @@ def test_real_data_mirror_preserves_packing_safety():
     packing = solve_packing(routes, orders, vehicles, rules)
     original = deepcopy(packing)
     result = sequence_loading(packing, routes, rules)
+    from test_packing import validate
+    validate(packing, routes, orders, vehicles, rules)
     types = {v["vehicle_id"]: v for v in vehicles["vehicles"]}
     mirrored = []
     for before, after in zip(original["vehicles"], packing["vehicles"]):

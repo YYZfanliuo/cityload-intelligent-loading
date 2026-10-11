@@ -1,5 +1,6 @@
 import json
 from collections import Counter
+from copy import deepcopy
 from itertools import permutations
 from math import fsum
 from pathlib import Path
@@ -276,6 +277,31 @@ def test_small_random_conservation_and_constraints(seed):
     scenario(items, size=(20, 20, 30), capacity=60,
              packing={"allow_rotation": True, "rotation_axes": ["".join(p) for p in permutations("lwh")],
                       "gap_cm": rng.choice([0, 1])})
+
+
+def test_packing_outputs_are_isolated_across_repeated_inputs_and_sequencing():
+    from solver.sequencing import sequence_loading
+
+    orders = {"orders": [{"order_id": "O1", "store_id": "S1", "items": [item()]},
+                          {"order_id": "O2", "store_id": "S2", "items": [item()]}]}
+    vehicles = {"vehicles": [{"vehicle_id": "V1", "cargo_length_cm": 20,
+                               "cargo_width_cm": 10, "cargo_height_cm": 10,
+                               "max_weight_kg": 100}]}
+    routes = {"routes": [{"route_id": "R1", "vehicle_type": "V1",
+                           "sequence": ["WH", "S2", "S1", "WH"]}]}
+    rules = {"packing": {"allow_rotation": False}}
+    snapshot = deepcopy((routes, orders, vehicles, rules))
+    first = solve_packing(routes, orders, vehicles, rules)
+    second = solve_packing(routes, orders, vehicles, rules)
+    assert first == second
+    delivery_routes = deepcopy(routes)
+    delivery_routes["routes"][0]["sequence"] = ["WH", "S1", "S2", "WH"]
+    sequence_loading(first, delivery_routes, rules)
+    assert first != second
+    assert second == solve_packing(routes, orders, vehicles, rules)
+    assert (routes, orders, vehicles, rules) == snapshot
+    validate(first, routes, orders, vehicles, rules)
+    validate(second, routes, orders, vehicles, rules)
 
 
 def test_real_30_store_constraints():
