@@ -1,0 +1,18 @@
+# ---- Python ----
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# ---- 运行产物 ----
+# 忽略目录中的大图（PNG），保留 report.html 与 JSON 结果
+output/figures/*.png
+
+# ---- 工具与 IDE ----
+.workbuddy/
+.DS_Store
+.idea/
+.vscode/
+*.swp
