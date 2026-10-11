@@ -125,7 +125,7 @@ def run_pipeline(data_dir: str | Path, out_dir: str | Path, baseline: bool = Fal
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="运行 CityLoad 完整管线")
     parser.add_argument("--data", default="data/", help="输入数据目录")
-    parser.add_argument("--out", default="output/", help="输出目录")
+    parser.add_argument("--out", default="outputs/", help="输出目录")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--baseline", action="store_true", help="运行贪心基线方案")
     mode.add_argument("--comparison", action="store_true", help="独立运行基线与优化方案，生成真实指标对比")

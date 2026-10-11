@@ -352,7 +352,7 @@ def _comparison_html(metrics: dict) -> str:
         "<th class=\"num\">优化方案</th><th class=\"num\">变化</th></tr></thead>"
     )
     note = ("注：变化 =（优化 − 基准）/ 基准；里程、成本、车辆数、未分配数为“降优”，"
-            "装载率、时效为“升优”。数字来源：experiments 对比实验与 output/metrics.json。")
+            "装载率、时效为“升优”。数字来源：experiments 对比实验与 outputs/metrics.json。")
     return (
         '<section class="card"><h2>6 · 优化 vs 基准对比</h2>'
         f"<table>{thead}<tbody>{''.join(rows)}</tbody></table>"
@@ -410,7 +410,7 @@ def build_html(routes: dict, metrics: dict, guide_text: dict,
         metrics: metrics.json 结构（可含可选键 "comparison"，见模块 docstring）
         guide_text: guide_text.json 结构
         figure_paths: render_figures 返回的图片路径列表
-        outpath: 输出 HTML 路径（如 output/report.html）
+        outpath: 输出 HTML 路径（如 outputs/report.html）
     """
     outpath = os.path.abspath(outpath)
     out_dir = os.path.dirname(outpath)

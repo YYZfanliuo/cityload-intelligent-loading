@@ -413,8 +413,8 @@ def _load_polish_prompt() -> str:
 if __name__ == "__main__":
     import sys
 
-    plan_path = sys.argv[1] if len(sys.argv) > 1 else "output/loading_plan.json"
-    routes_path = sys.argv[2] if len(sys.argv) > 2 else "output/routes.json"
+    plan_path = sys.argv[1] if len(sys.argv) > 1 else "outputs/loading_plan.json"
+    routes_path = sys.argv[2] if len(sys.argv) > 2 else "outputs/routes.json"
 
     def _read(path: str) -> dict:
         try:
