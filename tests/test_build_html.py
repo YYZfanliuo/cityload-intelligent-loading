@@ -75,3 +75,24 @@ def test_build_html_missing_figures_graceful(tmp_path):
                      [], str(tmp_path / "r" / "report.html"))
     text = open(ret, encoding="utf-8").read()
     assert "未生成" in text  # 路线图/3D 图占位提示
+
+
+def test_build_html_v13_item_counts(tmp_path):
+    """契约 v1.3：渲染装下率与未装载警示；unplaced=0 时警示自动隐藏。"""
+    bundle = mini_bundle()
+    base = bundle["metrics"]
+    metrics = {**base, "metrics": {**base["metrics"],
+                                   "total_item_count": 100, "placed_item_count": 92,
+                                   "unplaced_item_count": 8}}
+    _, text = _build(tmp_path, metrics)
+    assert "货物装载 92/100 件" in text
+    assert "装下率 92.0%" in text
+    assert "8 件货物因装载约束未能装入" in text
+
+    metrics0 = {**base, "metrics": {**base["metrics"],
+                                    "total_item_count": 100, "placed_item_count": 100,
+                                    "unplaced_item_count": 0}}
+    _, text0 = _build(tmp_path, metrics0)
+    assert "货物装载 100/100 件" in text0
+    assert "装下率 100.0%" in text0
+    assert "未能装入" not in text0

@@ -193,6 +193,7 @@ def mini_bundle() -> dict:
             "vehicle_count": 2, "total_distance_km": 60.5, "total_cost": 398.8,
             "avg_weight_load_rate": 0.3, "avg_volume_utilization": 0.15,
             "on_time_rate": 1.0, "unassigned_order_count": 0,
+            "total_item_count": 12, "placed_item_count": 12, "unplaced_item_count": 0,
             "solve_time_sec": 3.2, "peak_memory_mb": 120.5,
         },
         "per_route": [
@@ -309,7 +310,9 @@ def build_real_bundle(data_dir: str | Path, n_groups: int = 6) -> dict:
                   for e in placed) / (L * W * H)
         pack_vehicles.append({
             "vehicle_instance": instance, "vehicle_type": vtype,
-            "placed": placed, "unplaced": [e["sku"] for e in unplaced],
+            "placed": placed,
+            "unplaced": [{"sku": e["sku"], "order_id": e["order_id"],
+                          "store_id": e["store_id"], "qty": 1} for e in unplaced],
             "volume_utilization": round(vol, 4),
             "weight_utilization": round(group_weight / veh["max_weight_kg"], 4),
         })
@@ -361,6 +364,13 @@ def build_real_bundle(data_dir: str | Path, n_groups: int = 6) -> dict:
          "peak_memory_mb": routes["peak_memory_mb"], "unassigned_orders": []},
         orders, vehicles, network,
     )
+
+    # ---- 组装契约 v1.3 件级装载计数（与 run.py 的职责一致）----
+    placed_count = sum(len(v.get("placed") or []) for v in pack_vehicles)
+    unplaced_count = sum(len(v.get("unplaced") or []) for v in pack_vehicles)
+    metrics["metrics"]["total_item_count"] = placed_count + unplaced_count
+    metrics["metrics"]["placed_item_count"] = placed_count
+    metrics["metrics"]["unplaced_item_count"] = unplaced_count
 
     return {"network": network, "rules": rules, "routes": routes, "packing": packing,
             "loading_plan": loading_plan, "metrics": metrics, "guide_text": guide_text}

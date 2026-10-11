@@ -195,6 +195,11 @@ def _perf_line(m: dict) -> str:
         bits.append(f"峰值内存 {_fmt(m.get('peak_memory_mb'), '{:.1f}')} MB")
     if m.get("avg_volume_utilization") is not None:
         bits.append(f"平均体积利用率 {_pct(m.get('avg_volume_utilization'))}")
+    # 件级装载计数（契约 v1.3）：装下率 = placed / total
+    total = m.get("total_item_count")
+    placed = m.get("placed_item_count")
+    if isinstance(total, (int, float)) and total > 0 and isinstance(placed, (int, float)):
+        bits.append(f"货物装载 {int(placed)}/{int(total)} 件（装下率 {placed / total * 100:.1f}%）")
     if m.get("unassigned_order_count"):
         bits.append(f"未分配订单 {_fmt(m.get('unassigned_order_count'), '{:.0f}')} 个")
     if not bits:
@@ -218,16 +223,34 @@ def _cards_html(m: dict) -> str:
     return '<div class="kpis">' + "".join(cards) + "</div>"
 
 
-def _warn_html(routes: dict) -> str:
+def _warn_html(routes: dict, metrics: dict) -> str:
+    """页面顶部警示条：未分配订单（routes）+ 未装载货物（metrics v1.3），无则整块省略。"""
+    warns = []
     unassigned = routes.get("unassigned_orders") or []
-    if not unassigned:
+    if unassigned:
+        shown = "、".join(_esc(x) for x in unassigned[:10])
+        more = f" 等 {len(unassigned)} 单" if len(unassigned) > 10 else ""
+        warns.append(
+            f"注意：有 {len(unassigned)} 个订单未分配（{shown}{more}），"
+            f"详见 routes.json 的 unassigned_orders。"
+        )
+    m = (metrics or {}).get("metrics") or {}
+    unplaced = m.get("unplaced_item_count")
+    if isinstance(unplaced, (int, float)) and unplaced > 0:
+        placed = m.get("placed_item_count")
+        total = m.get("total_item_count")
+        detail = (
+            f"（已装 {int(placed)}/{int(total)} 件）"
+            if isinstance(placed, (int, float)) and isinstance(total, (int, float))
+            else ""
+        )
+        warns.append(
+            f"注意：有 {int(unplaced)} 件货物因装载约束未能装入车厢{detail}，"
+            f"详见 packing.json 的 unplaced 字段。"
+        )
+    if not warns:
         return ""
-    shown = "、".join(_esc(x) for x in unassigned[:10])
-    more = f" 等 {len(unassigned)} 单" if len(unassigned) > 10 else ""
-    return (
-        f'<div class="warn">注意：有 {len(unassigned)} 个订单未分配（{shown}{more}），'
-        f"详见 routes.json 的 unassigned_orders。</div>"
-    )
+    return "".join(f'<div class="warn">{w}</div>' for w in warns)
 
 
 def _routemap_html(path: str | None, out_dir: str) -> str:
@@ -410,7 +433,7 @@ def build_html(routes: dict, metrics: dict, guide_text: dict,
     context = {
         "page_title": "智载 CityLoad —— 城市配送智能配载方案（单页报告）",
         "meta_line": _meta_line(metrics, figure_paths),
-        "warn_html": _warn_html(routes),
+        "warn_html": _warn_html(routes, metrics),
         "scene_text": _scene_text(routes, metrics),
         "perf_line": _perf_line(m),
         "cards_html": _cards_html(m),

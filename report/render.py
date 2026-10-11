@@ -301,6 +301,27 @@ def _cargo_dims_for(veh: dict) -> tuple[float, float, float]:
     return _DEFAULT_CARGO_DIMS["V01"]
 
 
+def _packing_stats_lines(veh: dict) -> list[str]:
+    """3D 图左上角统计行：体积/载重利用率；货物未全部装载时追加“未装载 N 件”警示行。
+
+    契约 v1.3：packing.unplaced 非空时须如实披露；为空时自动隐藏警示行。
+    """
+    lines: list[str] = []
+    main: list[str] = []
+    vol = veh.get("volume_utilization")
+    wt = veh.get("weight_utilization")
+    if isinstance(vol, (int, float)):
+        main.append(f"体积利用率 {vol * 100:.0f}%")
+    if isinstance(wt, (int, float)):
+        main.append(f"载重利用率 {wt * 100:.0f}%")
+    if main:
+        lines.append(" · ".join(main))
+    unplaced_count = len(veh.get("unplaced") or [])
+    if unplaced_count:
+        lines.append(f"未装载 {unplaced_count} 件")
+    return lines
+
+
 def _render_packing(veh: dict, cargo, palette, outdir: str, idx: int) -> str:
     """单车厢 3D 装载总图。"""
     L, W, H = cargo
@@ -313,19 +334,16 @@ def _render_packing(veh: dict, cargo, palette, outdir: str, idx: int) -> str:
 
     instance = veh.get("vehicle_instance") or f"V{idx:02d}"
     ax.set_title(
-        f"{instance} 车厢 3D 装载图（车型 {veh.get('vehicle_type', '—')}）· 共 {len(placed)} 件",
+        f"{instance} 车厢 3D 装载图（车型 {veh.get('vehicle_type', '—')}）· 已装 {len(placed)} 件",
         fontsize=13,
     )
-    stats = []
-    vol = veh.get("volume_utilization")
-    wt = veh.get("weight_utilization")
-    if isinstance(vol, (int, float)):
-        stats.append(f"体积利用率 {vol * 100:.0f}%")
-    if isinstance(wt, (int, float)):
-        stats.append(f"载重利用率 {wt * 100:.0f}%")
-    if stats:
-        ax.text2D(0.02, 0.95, " · ".join(stats), transform=ax.transAxes,
+    stats_lines = _packing_stats_lines(veh)
+    if stats_lines:
+        ax.text2D(0.02, 0.95, stats_lines[0], transform=ax.transAxes,
                   fontsize=10, color="#334155")
+    if len(stats_lines) > 1:  # unplaced>0 时的红色警示行（=0 自动隐藏）
+        ax.text2D(0.02, 0.90, stats_lines[1], transform=ax.transAxes,
+                  fontsize=10, color="#b91c1c", fontweight="bold")
     if handles:
         ax.legend(handles=handles, loc="upper right", fontsize=7.5, framealpha=0.92,
                   title="门店", title_fontsize=8)

@@ -62,3 +62,28 @@ def test_render_is_deterministic(tmp_path):
     b = render_figures(bundle["routes"], bundle["packing"], bundle["loading_plan"],
                        bundle["network"], str(tmp_path / "b"))
     assert sorted(os.path.basename(p) for p in a) == sorted(os.path.basename(p) for p in b)
+
+
+def test_packing_stats_lines_reports_unplaced():
+    """契约 v1.3：unplaced 非空时统计行包含“未装载 N 件”；为空时自动隐藏。"""
+    from report.render import _packing_stats_lines
+
+    ok = _packing_stats_lines({"volume_utilization": 0.5, "weight_utilization": 0.6,
+                               "unplaced": []})
+    assert ok == ["体积利用率 50% · 载重利用率 60%"]
+    warn = _packing_stats_lines({"volume_utilization": 0.5, "weight_utilization": 0.6,
+                                 "unplaced": [{"sku": "A"}, {"sku": "B"}]})
+    assert warn[-1] == "未装载 2 件"
+    assert len(warn) == 2
+
+
+def test_render_packing_with_unplaced_ok(tmp_path):
+    """带未装载货物的 packing 数据仍能正常渲染（标注不破坏出图）。"""
+    bundle = mini_bundle()
+    bundle["packing"]["vehicles"][0]["unplaced"] = [{"sku": "SKU0999", "qty": 1}]
+    out = render_figures(bundle["routes"], bundle["packing"], bundle["loading_plan"],
+                         bundle["network"], str(tmp_path))
+    names = [os.path.basename(p) for p in out]
+    assert "packing_V01.png" in names
+    for p in out:
+        _assert_png(p)
