@@ -129,3 +129,50 @@ def test_warning_checks_all_overhead_not_only_immediate_support():
 def test_same_store_stack_and_channel_need_no_cross_store_warning():
     assert plan([box("S01"), box("S01", z=10), box("S01", x=10)],
                 ("S01",))["blocks_warning"] == []
+
+
+def test_real_data_mirror_preserves_packing_safety():
+    from solver.packing import solve_packing
+    from solver.routing import solve_routing
+
+    data = Path(__file__).resolve().parents[1] / "data"
+    orders, vehicles, network, rules = [json.loads((data / f"{name}.json").read_text(
+        encoding="utf-8")) for name in ("orders", "vehicles", "network", "rules")]
+    routes = solve_routing(orders, vehicles, network, rules)
+    packing = solve_packing(routes, orders, vehicles, rules)
+    original = deepcopy(packing)
+    result = sequence_loading(packing, routes, rules)
+    types = {v["vehicle_id"]: v for v in vehicles["vehicles"]}
+    mirrored = []
+    for before, after in zip(original["vehicles"], packing["vehicles"]):
+        if before != after:
+            mirrored.append(after["vehicle_instance"])
+        for i, placed in enumerate(after["placed"]):
+            assert not any(all(min(placed["position_cm"][axis] + placed["size_placed_cm"][size],
+                                   other["position_cm"][axis] + other["size_placed_cm"][size]) -
+                               max(placed["position_cm"][axis], other["position_cm"][axis]) > 1e-7
+                               for axis, size in (("x", "l"), ("y", "w"), ("z", "h")))
+                           for other in after["placed"][i + 1:])
+            for axis, size, limit in (("x", "l", "cargo_length_cm"),
+                                     ("y", "w", "cargo_width_cm"),
+                                     ("z", "h", "cargo_height_cm")):
+                start = placed["position_cm"][axis]
+                assert start >= -1e-7
+                assert start + placed["size_placed_cm"][size] <= types[after["vehicle_type"]][limit] + 1e-7
+            if placed["position_cm"]["z"] > 1e-7:
+                assert any(abs(base["position_cm"]["z"] + base["size_placed_cm"]["h"]
+                               - placed["position_cm"]["z"]) <= 1e-7 and
+                           all(base["position_cm"][axis] <= placed["position_cm"][axis] + 1e-7 and
+                               placed["position_cm"][axis] + placed["size_placed_cm"][size] <=
+                               base["position_cm"][axis] + base["size_placed_cm"][size] + 1e-7
+                               for axis, size in (("x", "l"), ("y", "w")))
+                           for base in after["placed"] if base is not placed)
+            before["placed"][i]["position_cm"]["x"] = placed["position_cm"]["x"]
+        assert before == after
+    count = sum(len(v["placed"]) for v in packing["vehicles"])
+    assert sum(item["qty"] for p in result["plans"] for s in p["loading_steps"]
+               for item in s["items"]) == count
+    print({"mirrored_vehicles": mirrored, "placed": count,
+           "unplaced": sum(len(v["unplaced"]) for v in packing["vehicles"]),
+           "warnings": sum(len(p["blocks_warning"]) for p in result["plans"]),
+           "warning_vehicles": sum(bool(p["blocks_warning"]) for p in result["plans"])})
