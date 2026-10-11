@@ -1,7 +1,7 @@
 # 测试记录与边界 case 清单（T33）
 
-> **状态**：进行中 —— 窗口B 负责汇总；算法（窗口C）与可视化（窗口E）部分待其代码就绪后补测。
-> **最后更新**：2026-10-11 17:50（窗口B，含 T02b 第二组数据集自检记录）
+> **状态**：进行中 —— 窗口B 负责汇总。E 侧补测已完成；C 侧 3 项边界与最终快照待窗口C 定稿后补测。
+> **最后更新**：2026-10-11 19:05（窗口B：E 侧补测 + 全量单测快照 commit `5498ae5`）
 
 ---
 
@@ -46,6 +46,49 @@ tests/test_metrics.py::test_smoke_with_real_dataset PASSED                      
 | 双组差异 | seed 42 vs seed 7 | 行数 328/318、件数 3656/3751、坐标 0 重合 |
 | 总量健康 | 多 seed 统计总重占比 | 57.2%–58.4%，全部落在 55%–75% 要求内 |
 
+### 1.3 全量单测快照（提交版本 `5498ae5`，窗口B 统一执行）✅
+
+> 运行口径：从 dev 分支提交版本 `5498ae5` 导出**干净工作树快照**后运行全量测试，
+> 与各窗口进行中的未提交修改相互隔离（可复现：commit hash + 下述命令）。
+
+```bash
+git worktree add <tmpdir> 5498ae5 && cd <tmpdir>
+python -m pytest tests/ -v --tb=line
+```
+
+结果：**82 项收集，81 通过 + 1 跳过（0 失败）**
+
+| 测试文件 | 通过 | 跳过 | 归属 |
+|----------|------|------|------|
+| test_build_html.py | 5 | 0 | 窗口E |
+| test_explainer.py | 19 | 1 | 窗口D |
+| test_metrics.py | 5 | 0 | 窗口B |
+| test_packing.py | 32 | 0 | 窗口C |
+| test_parser.py | 14 | 0 | 窗口D |
+| test_render.py | 4 | 0 | 窗口E |
+| test_routing.py | 2 | 0 | 窗口C |
+| **合计** | **81** | **1** | — |
+
+- 跳过项：`test_explainer.py::test_real_pipeline_integration`（设计性跳过：待 solver 定稿后启用真实管线集成）。
+- ⚠️ **已知风险用例备注**（主规划 19:10 通报 + 窗口B 观测）：`test_routing_is_deterministic`
+  存在**偶发失败**风险 —— OR-Tools 的 `time_limit` 求解结果受 CPU 负载影响，
+  同一输入两次求解可能落在不同局部最优。窗口B 3 次运行中该用例均通过；
+  T31 对比实验复跑时如遇失败，需重试并如实记录。
+
+### 1.4 窗口E 模块补测（T33 补测项 #1）✅
+
+**（a）E 单测**：`test_render.py`（4 项）+ `test_build_html.py`（5 项）全部通过（见 1.3 快照表）。
+
+**（b）mock 端到端管线**（`tests/mock_pipeline.py`：真实 `data/` 组装 mock 求解结果 → 渲染 → HTML）：
+
+| 输入数据 | 图件 | report.html | 用时 | 结果 |
+|----------|------|-------------|------|------|
+| seed42 组（`data/`） | 37 张（路线图×1 + 车厢 3D 图×6 + 分步图×30） | 18,956 B | 12.3s | ✅ 全通 |
+| seed7 组（`data/seed7/`） | 37 张 | 18,948 B | 13.0s | ✅ 全通（第二组数据兼容验证） |
+
+> 该链路中 `metrics` 由真实 `eval/metrics.py` 计算 —— B/C/E 三方模块在 mock 层面已联通。
+> 待窗口C T25 `run.py` 完成后，用真实求解结果复跑端到端并更新本节。
+
 ---
 
 ## 2. 边界 case 清单与实测记录
@@ -63,14 +106,17 @@ tests/test_metrics.py::test_smoke_with_real_dataset PASSED                      
 | 6 | 订单超载（单车载重 < 单订单重量） | 待窗口C solver 就绪后构造 2000kg 订单实测 | 待补 | ⏳ |
 | 7 | 易碎品堆叠冲突 | 待窗口C packing 就绪后实测（数据已含 33 行 fragile、40 行不可堆叠） | 待补 | ⏳ |
 | 8 | 车辆数不足导致订单未分配 | 待窗口C solver 就绪后实测 | 待补（指标侧计数已验：case_b） | ⏳ |
+| 9 | 渲染空输入（E 模块） | E 单测 `test_render_empty_inputs_do_not_crash` | 不抛异常，仍生成 route_map.png | ✅ 已实测 |
+| 10 | HTML 缺图降级（E 模块） | E 单测 `test_build_html_missing_figures_graceful` | 输出"未生成"占位提示，不崩溃 | ✅ 已实测 |
 
 ---
 
 ## 3. 待补计划（窗口B 汇总）
 
-- [ ] 窗口C solver 就绪后：补测边界 6/7/8（超载、易碎堆叠、运力不足），记录真实输出与优雅性判定
-- [ ] 窗口C 单测（test_routing.py / test_packing.py）运行记录并入本文件
-- [ ] 窗口E 端到端 `run.py` 全流程跑通记录并入本文件
+- [x] ~~窗口E 端到端管线记录~~ ✅ 已完成（2026-10-11 19:05，见 1.4 节）
+- [x] ~~窗口C 单测运行记录~~ ✅ 部分完成（test_routing/test_packing 已入 1.3 快照；test_sequencing 待窗口C 提交后补）
+- [ ] 窗口C 最终版（T12 修复 + T13/T14/T25）提交后：**刷新全量快照**并在此更新
+- [ ] 窗口C 定稿后：补测边界 6/7/8（超载、易碎堆叠、运力不足），记录真实输出与优雅性判定
 - [ ] 数据泄漏/红线检查：README 数字须来自 experiments/results.md（主规划核对）
 
 ---
@@ -82,4 +128,5 @@ tests/test_metrics.py::test_smoke_with_real_dataset PASSED                      
 | Python（业务代码） | 3.13.14（`C:/Users/y1933/.workbuddy/binaries/python/versions/3.13.12/python.exe`），兼容 3.10+ |
 | pytest 环境 | `C:/Users/y1933/.workbuddy/binaries/python/envs/default`（pytest 9.1.1） |
 | 运行 pytest | `C:/Users/y1933/.workbuddy/binaries/python/envs/default/Scripts/python.exe -m pytest tests/ -v` |
-| 数据集 | `data/`（seed 42，30 门店场景；可换 seed 复现） |
+| 快照测试方法 | `git worktree add <tmpdir> <commit>` 从提交版本导出干净快照后运行，与工作树隔离；本轮快照 = `5498ae5` |
+| 数据集 | `data/`（seed 42）+ `data/seed7/`（seed 7），均为 30 门店场景 |
