@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$page_title</title>
+<style>
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: #f4f6fa;
+    color: #1f2937;
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 22px; }
+
+  /* ---------- 头部 ---------- */
+  .hero {
+    background: linear-gradient(135deg, #123a7d 0%, #1d63d8 100%);
+    color: #ffffff;
+    padding: 36px 0 30px;
+  }
+  .hero .eyebrow { margin: 0; font-size: 12.5px; letter-spacing: 2px; opacity: .88; }
+  .hero h1 { margin: 8px 0 10px; font-size: 30px; line-height: 1.35; letter-spacing: .5px; }
+  .hero .sub { margin: 0; font-size: 14px; opacity: .93; }
+
+  /* ---------- 通用卡片 ---------- */
+  main { padding-bottom: 8px; }
+  .card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 22px 26px 24px;
+    margin: 22px 0;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .05);
+  }
+  .card h2 {
+    font-size: 19px;
+    margin: 0 0 14px;
+    padding-left: 12px;
+    border-left: 4px solid #1d63d8;
+    line-height: 1.4;
+  }
+  .card h3 { font-size: 16.5px; margin: 0 0 6px; }
+  .muted { color: #64748b; font-size: 13px; }
+
+  /* ---------- KPI 卡片 ---------- */
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 14px;
+    margin: 12px 0 4px;
+  }
+  .kpi {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .kpi .v { font-size: 26px; font-weight: 700; color: #0f4bb8; line-height: 1.3; }
+  .kpi .v small { font-size: 14px; font-weight: 600; color: #334155; }
+  .kpi .l { font-size: 13px; color: #64748b; margin-top: 2px; }
+  .perf { color: #64748b; font-size: 13px; margin: 10px 0 2px; }
+
+  /* ---------- 图件 ---------- */
+  figure { margin: 0 0 16px; }
+  figure img {
+    width: 100%; height: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #ffffff;
+    display: block;
+  }
+  figcaption { font-size: 13px; color: #64748b; margin-top: 6px; text-align: center; }
+
+  .vehicle {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px 18px 10px;
+    margin: 16px 0;
+    background: #fcfdff;
+  }
+  .vehicle .tag {
+    font-size: 12px;
+    color: #0f4bb8;
+    background: #e8f0fe;
+    border-radius: 999px;
+    padding: 2px 10px;
+    margin-left: 8px;
+    vertical-align: 2px;
+    white-space: nowrap;
+  }
+  .vehicle .vmeta { font-size: 13px; color: #64748b; margin: 2px 0 10px; }
+  .guide-text {
+    background: #f8fafc;
+    border-left: 3px solid #93c5fd;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 16px;
+    margin: 12px 0 14px;
+    font-size: 14px;
+  }
+  .guide-text p { margin: 6px 0; }
+  .steps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 12px;
+    margin-top: 8px;
+  }
+  .steps-grid figure { margin-bottom: 8px; }
+
+  /* ---------- 表格 ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 6px 0 4px; }
+  th, td { border-bottom: 1px solid #e5e7eb; padding: 9px 10px; text-align: left; }
+  th { background: #f1f5f9; font-weight: 600; color: #334155; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:hover td { background: #f8fafc; }
+  .better { color: #15803d; font-weight: 600; }
+  .worse { color: #b91c1c; font-weight: 600; }
+
+  /* ---------- 提示与说明 ---------- */
+  .warn {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #9a3412;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin: 18px 0 0;
+    font-size: 14px;
+  }
+  .notes ul { padding-left: 20px; margin: 8px 0; }
+  .notes li, .notes p { font-size: 14px; color: #334155; }
+  .placeholder {
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    padding: 24px;
+    color: #94a3b8;
+    text-align: center;
+    font-size: 14px;
+  }
+  .foot { color: #64748b; font-size: 13px; text-align: center; padding: 10px 22px 44px; }
+  .foot p { margin: 4px 0; }
+
+  @media (max-width: 640px) {
+    .hero h1 { font-size: 23px; }
+    .card { padding: 18px 16px; }
+    .kpi .v { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">TRACK 02 · AI＋物流 · 城市配送智能配载</p>
+    <h1>智载 CityLoad —— 城市配送智能配载方案</h1>
+    <p class="sub">$meta_line</p>
+  </div>
+</header>
+
+<main class="wrap">
+  $warn_html
+
+  <section class="card">
+    <h2>1 · 场景说明</h2>
+    $scene_text
+  </section>
+
+  <section class="card">
+    <h2>2 · 核心指标</h2>
+    $perf_line
+    $cards_html
+  </section>
+
+  <section class="card">
+    <h2>3 · 配送路线图</h2>
+    $routemap_html
+  </section>
+
+  <section class="card">
+    <h2>4 · 车厢 3D 装载方案</h2>
+    <p class="muted">每辆车厢的 3D 装箱结果（半透明立方体为货物，按门店着色；坐标原点位于车厢左下后角，x 向车头）。</p>
+    $packing_html
+  </section>
+
+  <section class="card">
+    <h2>5 · 分步装卸指引</h2>
+    <p class="muted">按“后送先装”顺序生成的分步骤装载示意与文字指引，供现场装卸人员对照执行。</p>
+    $guide_html
+  </section>
+
+  $comparison_html
+
+  <section class="card notes">
+    <h2>$notes_no · 数据来源与说明</h2>
+    $notes_html
+  </section>
+</main>
+
+<footer class="foot">
+  <p>$footer_line</p>
+  <p>本报告为静态离线页面：无外部 CDN 依赖、无脚本，可直接用浏览器打开或随仓库分发。</p>
+</footer>
+
+</body>
+</html>
