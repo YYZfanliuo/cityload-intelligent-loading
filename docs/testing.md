@@ -1,7 +1,7 @@
 # 测试记录与边界 case 清单（T33）
 
-> **状态**：进行中 —— 窗口B 负责汇总。E 侧补测与 3 项边界补测已完成；待 T31 完成后刷新快照并定稿。
-> **最后更新**：2026-10-11 19:55（窗口B：体检预跑快照 aa6a91a——122 通过/1 跳过/0 失败）
+> **状态**：✅ **已定稿**（终稿基点：commit `9bb81f6`）—— 全量 155 通过 + 1 跳过 + 0 失败
+> **最后更新**：2026-10-11 21:30（窗口B：T33 定稿）
 
 ---
 
@@ -50,40 +50,43 @@ tests/test_metrics.py::test_smoke_with_real_dataset PASSED                      
 
 > 运行口径：从 dev 分支提交版本导出**干净工作树快照**后运行全量测试，
 > 与各窗口进行中的未提交修改相互隔离（可复现：commit hash + 下述命令）。
+> 环境提示：本机 pytest 收尾清理临时目录可能被系统安全机制拦截（表现为 EXIT=1 且无汇总行，
+> **非测试失败**，以逐项统计为准）；将 TMP/TEMP/TMPDIR 设为自管目录即可获得干净汇总。
 
 ```bash
 git worktree add <tmpdir> <commit> && cd <tmpdir>
-python -m pytest tests/ -v --tb=line
+TMP=<tmpdir>/.mytmp TEMP=<tmpdir>/.mytmp TMPDIR=<tmpdir>/.mytmp \
+    python -m pytest tests/ -v --tb=line
 ```
 
-**最新快照：commit `aa6a91a`（2026-10-11 19:50 体检预跑）—— 123 项收集，122 通过 + 1 跳过，0 失败**
+**终稿快照：commit `9bb81f6`（2026-10-11 21:20）—— 156 项收集，155 通过 + 1 跳过，0 失败（70s）**
 
 | 测试文件 | 通过 | 跳过 | 归属 |
 |----------|------|------|------|
 | test_baseline.py | 4 | 0 | 窗口C |
 | test_build_html.py | 6 | 0 | 窗口E |
 | test_edge_cases.py | 4 | 0 | 窗口B |
-| test_explainer.py | 19 | 1 | 窗口D |
+| test_experiments.py | 20 | 0 | 窗口C |
+| test_explainer.py | 22 | 1 | 窗口D |
+| test_final_outputs.py | 4 | 0 | 窗口C/E |
 | test_metrics.py | 5 | 0 | 窗口B |
-| test_packing.py | 37 | 0 | 窗口C |
+| test_packing.py | 38 | 0 | 窗口C |
 | test_parser.py | 14 | 0 | 窗口D |
 | test_render.py | 6 | 0 | 窗口E |
-| test_routing.py | 12 | 0 | 窗口C |
+| test_routing.py | 15 | 0 | 窗口C |
 | test_run.py | 2 | 0 | 窗口C/E |
-| test_sequencing.py | 13 | 0 | 窗口C |
-| **合计** | **122** | **1** | — |
+| test_sequencing.py | 15 | 0 | 窗口C |
+| **合计** | **155** | **1** | — |
 
-- 跳过项：`test_explainer.py::test_real_pipeline_integration`（设计性跳过：待 solver 定稿后启用真实管线集成）。
-- ⚠️ **已知风险用例备注**（主规划 19:10 通报 + 窗口B 观测）：`test_routing_is_deterministic`
-  存在**偶发失败**风险 —— OR-Tools 的 `time_limit` 求解结果受 CPU 负载影响，
-  同一输入两次求解可能落在不同局部最优。多轮快照中该用例均通过；
-  T31 对比实验复跑时如遇失败，需重试并如实记录。
-- 历史快照：`5498ae5`（19:05）— 82 项 = 81 通过 + 1 跳过（较上轮本轮 +41 项，新增
-  test_sequencing / test_baseline / test_run / test_edge_cases 四个测试文件）。
+- 跳过项：`test_explainer.py::test_real_pipeline_integration`（设计性跳过，接口保留）。
+- ✅ **routing 确定性（已解决）**：T31/T31b 已固定 OR-Tools 随机性（固定自然下降搜索 + 双轮业务一致性验证）。
+  旧 `test_routing_is_deterministic`（曾因 `time_limit` 受 CPU 负载影响存在偶发失败风险，主规划 19:10 通报）
+  已由 `test_real_data_constraints_and_objective_stability` 等测试替代；终稿多轮快照均全绿，无偶发失败复现。
+- 快照演进：`5498ae5` 82 项（81+1）→ `aa6a91a` 123 项（122+1）→ `9bb81f6` 156 项（155+1，终稿）。
 
 ### 1.4 窗口E 模块补测（T33 补测项 #1）✅
 
-**（a）E 单测**：`test_render.py`（4 项）+ `test_build_html.py`（5 项）全部通过（见 1.3 快照表）。
+**（a）E 单测**：`test_render.py`（6 项）+ `test_build_html.py`（6 项）全部通过（见 1.3 快照表）。
 
 **（b）mock 端到端管线**（`tests/mock_pipeline.py`：真实 `data/` 组装 mock 求解结果 → 渲染 → HTML）：
 
@@ -93,13 +96,12 @@ python -m pytest tests/ -v --tb=line
 | seed7 组（`data/seed7/`） | 37 张 | 18,948 B | 13.0s | ✅ 全通（第二组数据兼容验证） |
 
 > 该链路中 `metrics` 由真实 `eval/metrics.py` 计算 —— B/C/E 三方模块在 mock 层面已联通。
-> 待窗口C T25 `run.py` 完成后，用真实求解结果复跑端到端并更新本节。
+> T25 `run.py` 完成后已由真实管线取代（终稿产物见 `outputs/`，另有 `test_run.py` / `test_final_outputs.py` 覆盖）。
 
 ### 1.5 边界补测：超载 / 易碎堆叠 / 运力不足（T33 补测项 #2）✅
 
-> 口径：在**窗口C 当前工作树版本**上预跑（主规划安排，用于提前暴露问题），
-> 新增独立测试 `tests/test_edge_cases.py`（4 用例，35.8s，全绿）。
-> C 定稿后将在提交快照上随全量快照一并复跑。
+> 口径：先在**窗口C 当时工作树版本**上预跑（主规划安排，用于提前暴露问题），
+> 新增独立测试 `tests/test_edge_cases.py`；终稿已在快照 `9bb81f6` 上复核（4/4 全绿，见 1.3 表）。
 
 | 场景 | 用例 | 实测表现（2026-10-11 19:30） |
 |------|------|------------------------------|
@@ -123,7 +125,7 @@ python -m pytest tests/ -v --tb=line
 | 1 | 空订单（0 门店） | `python data/gen_data.py --stores 0` | **修复前**：`ZeroDivisionError` 崩溃（总重校准除零）→ **修复后**：优雅输出 `0 门店 / 1 节点 / 1×1 矩阵`，exit 0 | ✅ 已实测 |
 | 2 | 单门店 | `python data/gen_data.py --stores 1` | 正常输出：10 SKU 行 / 990 件 / 总重 1609.7 kg（单车 V01 1700kg 可装下） | ✅ 已实测 |
 | 3 | 空路由（无车出动） | pytest `test_case_c` | 全指标归零（vehicle_count=0、rates=0.0），不崩溃 | ✅ 已实测 |
-| 4 | 时间窗不满足（晚点） | pytest `test_case_b`（S02 16:30 到，窗 12:00–16:00） | on_time_rate 正确计 1/3，晚点停靠被识别 | ✅ 部分实测（算法侧软约束处理待补） |
+| 4 | 时间窗不满足（晚点） | pytest `test_case_b`（S02 16:30 到，窗 12:00–16:00）；算法侧软窗由 `test_soft_window_and_window_disabled` 覆盖 | on_time_rate 正确计 1/3，晚点停靠被识别；软窗/禁用窗两种模式均有测试 | ✅ 已实测 |
 | 5 | 重复停靠（异常输入） | pytest `test_case_d` | 同店只计一次时效，不重复计数 | ✅ 已实测 |
 | 6 | 订单超载（单订单 5.2t > 单车 1.7t） | `tests/test_edge_cases.py::test_overload_single_order_graceful` | **优雅**：该单进 `unassigned_orders`、不硬塞任何车；其余 29 单正常服务；0 崩溃 | ✅ 已实测 |
 | 7 | 易碎品堆叠冲突 | `test_fragile_not_compressed_real_data`（全链路 166 件易碎品几何验证）+ `test_fragile_pressure_never_stacked_illegally`（32 件单层放不下的压力场景） | **优雅**：0 几何违规（无压/无相交）；放不下的进 unplaced；数量守恒（40/40） | ✅ 已实测 |
@@ -133,13 +135,13 @@ python -m pytest tests/ -v --tb=line
 
 ---
 
-## 3. 待补计划（窗口B 汇总）
+## 3. 收尾检查（T33 定稿版）
 
-- [x] ~~窗口E 端到端管线记录~~ ✅ 已完成（2026-10-11 19:05，见 1.4 节）
-- [x] ~~窗口C 单测运行记录~~ ✅ 部分完成（test_routing/test_packing 已入 1.3 快照；test_sequencing 待窗口C 提交后补）
-- [x] ~~补测边界 6/7/8（超载、易碎堆叠、运力不足）~~ ✅ 已完成预跑（2026-10-11 19:30，见 1.5 节）
-- [ ] 窗口C 最终版（T12 修复 + T13/T14/T25）提交后：**刷新全量快照**（含 test_edge_cases.py 4 项）并定稿 T33
-- [ ] 数据泄漏/红线检查：README 数字须来自 experiments/results.md（主规划核对）
+- [x] 窗口E 端到端管线记录 → 见 1.4 节
+- [x] 窗口C 单测运行记录（test_routing / packing / sequencing / baseline / experiments）→ 见 1.3 节
+- [x] 补测边界 6/7/8（超载、易碎堆叠、运力不足）→ 见 1.5 节 + 第 2 节边界表
+- [x] 全量快照定稿（终稿基点 `9bb81f6`：155 通过 + 1 跳过 + 0 失败）→ 见 1.3 节
+- [ ] 数据泄漏/红线检查（README 数字须来自 experiments/results.md）—— **移交主规划 T42 合规自查执行**
 
 ---
 
@@ -150,5 +152,5 @@ python -m pytest tests/ -v --tb=line
 | Python（业务代码） | 3.13.14（`C:/Users/y1933/.workbuddy/binaries/python/versions/3.13.12/python.exe`），兼容 3.10+ |
 | pytest 环境 | `C:/Users/y1933/.workbuddy/binaries/python/envs/default`（pytest 9.1.1） |
 | 运行 pytest | `C:/Users/y1933/.workbuddy/binaries/python/envs/default/Scripts/python.exe -m pytest tests/ -v` |
-| 快照测试方法 | `git worktree add <tmpdir> <commit>` 从提交版本导出干净快照后运行，与工作树隔离；本轮快照 = `5498ae5` |
+| 快照测试方法 | `git worktree add <tmpdir> <commit>` 从提交版本导出干净快照后运行，与工作树隔离；终稿快照 = `9bb81f6`（运行建议：TMP/TEMP/TMPDIR 指向自管目录，规避沙箱清理拦截） |
 | 数据集 | `data/`（seed 42）+ `data/seed7/`（seed 7），均为 30 门店场景 |
