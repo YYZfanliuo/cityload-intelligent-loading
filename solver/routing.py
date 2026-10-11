@@ -14,6 +14,9 @@ except ImportError:  # 可选求解依赖缺失时使用保守构造
 
 DEPARTURE = 8 * 3600
 MONEY_SCALE = 60000
+SEARCH_SEED = 42
+SEARCH_SAFETY_SECONDS = 120
+_LAST_SEARCH_DIAGNOSTICS: dict[str, Any] = {}
 
 
 def _minutes(value: str) -> float:
@@ -117,6 +120,8 @@ def _heuristic(orders, vehicles, node_order, distance, duration, rules):
 
 def _ortools_solve(order_list, fleet, node_order, distance, duration, rules):
     """以相同人民币缩放优化固定费、车型里程费、迟到费和弃单费。"""
+    global _LAST_SEARCH_DIAGNOSTICS
+    _LAST_SEARCH_DIAGNOSTICS = {"status": "not_started"}
     manager = pywrapcp.RoutingIndexManager(len(node_order), len(fleet), 0)
     model = pywrapcp.RoutingModel(manager)
     by_store = {o["store_id"]: o for o in order_list}
@@ -162,9 +167,37 @@ def _ortools_solve(order_list, fleet, node_order, distance, duration, rules):
         model.AddVariableMinimizedByFinalizer(dimension.CumulVar(manager.NodeToIndex(node)))
     params = pywrapcp.DefaultRoutingSearchParameters()
     params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
-    params.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
-    params.time_limit.FromSeconds(10)
+    params.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GREEDY_DESCENT
+    # RoutingSearchParameters 没有 random_seed；固定实际 CP 随机源。
+    model.solver().ReSeed(SEARCH_SEED)
+    params.sat_parameters.random_seed = SEARCH_SEED
+    params.sat_parameters.num_workers = 1
+    # LNS 子搜索默认依赖 100ms 墙钟预算，关闭它们避免机器负载影响邻域结果。
+    for field in params.local_search_operators.DESCRIPTOR.fields:
+        if field.name.endswith("_lns"):
+            setattr(params.local_search_operators, field.name, pywrapcp.BOOL_FALSE)
+    # 确定性下降搜索自然到达局部最优，不按墙钟选择迭代深度。
+    # 不在首解构造前施加分支预算，避免截断为全弃单。
+    params.time_limit.FromSeconds(SEARCH_SAFETY_SECONDS)
+    started = time.perf_counter()
     solution = model.SolveWithParameters(params)
+    elapsed = time.perf_counter() - started
+    solver = model.solver()
+    status = int(model.status())
+    branches, failures, solutions = solver.Branches(), solver.Failures(), solver.Solutions()
+    wall_hit = elapsed >= SEARCH_SAFETY_SECONDS - 0.5
+    if wall_hit:
+        stop_reason = "wall"
+    elif status in (routing_enums_pb2.RoutingSearchStatus.ROUTING_SUCCESS,
+                    routing_enums_pb2.RoutingSearchStatus.ROUTING_OPTIMAL):
+        stop_reason = "local_search_completed"
+    else:
+        stop_reason = "unknown"
+    _LAST_SEARCH_DIAGNOSTICS = {
+        "status": status, "branches": branches, "failures": failures, "solutions": solutions,
+        "elapsed_sec": round(elapsed, 6), "safety_seconds": SEARCH_SAFETY_SECONDS,
+        "stop_reason": stop_reason,
+    }
     if solution is None:
         return None
     routes = []
@@ -208,6 +241,8 @@ def _peak_memory_mb():
 
 def solve_routing(orders: dict, vehicles: dict, network: dict, rules: dict) -> dict:
     """固定 08:00 出发；仅依赖缺失或无解时安全回退，不吞编程异常。"""
+    global _LAST_SEARCH_DIAGNOSTICS
+    _LAST_SEARCH_DIAGNOSTICS = {"status": None, "stop_reason": "not_started"}
     started = time.perf_counter()
     order_list = list(orders.get("orders", []))
     if len({o["store_id"] for o in order_list}) != len(order_list):

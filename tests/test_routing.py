@@ -61,17 +61,59 @@ def _assert_feasible(result, orders, vehicles, network, rules):
     assert result["status"] == ("partial" if result["unassigned_orders"] else "ok")
 
 
-def test_real_data_constraints_and_objective_stability():
-    args = (_load("orders.json"), _load("vehicles.json"), _load("network.json"), _load("rules.json"))
-    results = [routing.solve_routing(*args) for _ in range(2)]
+@pytest.mark.parametrize("data_dir", ["", "seed7/"])
+def test_real_data_constraints_and_exact_repeatability(data_dir):
+    args = tuple(_load(data_dir + name + ".json") for name in ("orders", "vehicles", "network", "rules"))
+    results = []
+    for _ in range(2):
+        results.append(routing.solve_routing(*args))
+        if routing.pywrapcp is not None:
+            assert routing._LAST_SEARCH_DIAGNOSTICS["stop_reason"] == "local_search_completed"
+            assert routing._LAST_SEARCH_DIAGNOSTICS["solutions"] > 0
     for result in results:
         _assert_feasible(result, *args)
         assert result["solve_time_sec"] < 60
         assert result["peak_memory_mb"] > 0
-        assert result["summary"]["vehicle_count"] == len(result["routes"])
-    # 限时局部搜索不保证精确序列相同，只验收约束、订单守恒与费用质量稳定。
-    costs = [r["summary"]["total_cost"] for r in results]
-    assert max(costs) <= min(costs) * 1.1
+        assert result["summary"]["vehicle_count"] == len(result["routes"]) > 0
+        assert result["unassigned_orders"] == []
+    # 运行观测量不参与确定性验收；路线、时刻、弃单与费用必须逐字段一致。
+    stable = [{key: value for key, value in result.items() if key not in {"solve_time_sec", "peak_memory_mb"}} for result in results]
+    assert stable[0] == stable[1]
+
+
+def test_search_budget_and_random_sources_are_fixed(monkeypatch):
+    if routing.pywrapcp is None:
+        pytest.skip("随机源与搜索参数验收需要OR-Tools")
+    original = routing.pywrapcp.DefaultRoutingSearchParameters
+    captured = []
+    def capture_parameters():
+        params = original()
+        captured.append(params)
+        return params
+    monkeypatch.setattr(routing.pywrapcp, "DefaultRoutingSearchParameters", capture_parameters)
+    result = routing.solve_routing(*_case())
+    assert result["solver_backend"] == "ortools"
+    params = captured[0]
+    assert params.solution_limit == original().solution_limit
+    assert params.local_search_metaheuristic == routing.routing_enums_pb2.LocalSearchMetaheuristic.GREEDY_DESCENT
+    assert params.time_limit.seconds == routing.SEARCH_SAFETY_SECONDS == 120
+    assert params.sat_parameters.random_seed == routing.SEARCH_SEED == 42
+    assert params.sat_parameters.num_workers == 1
+    assert all(getattr(params.local_search_operators, field.name) == routing.pywrapcp.BOOL_FALSE
+               for field in params.local_search_operators.DESCRIPTOR.fields if field.name.endswith("_lns"))
+    diagnostics = routing._LAST_SEARCH_DIAGNOSTICS
+    assert diagnostics["status"] == 1
+    assert diagnostics["stop_reason"] == "local_search_completed"
+    assert diagnostics["branches"] >= 0
+    assert diagnostics["failures"] >= 0
+    assert diagnostics["solutions"] > 0
+
+
+def test_search_diagnostics_reset_when_search_is_skipped(monkeypatch):
+    monkeypatch.setattr(routing, "_LAST_SEARCH_DIAGNOSTICS", {"stop_reason": "local_search_completed"})
+    monkeypatch.setattr(routing, "pywrapcp", None)
+    routing.solve_routing(*_case())
+    assert routing._LAST_SEARCH_DIAGNOSTICS == {"status": None, "stop_reason": "not_started"}
 
 
 def test_hand_computed_fixed_and_vehicle_cost():
