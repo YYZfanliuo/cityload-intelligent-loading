@@ -1,0 +1,36 @@
+[
+  {
+    "seed": "seed42",
+    "total_items": 3656,
+    "placed": 3384,
+    "unplaced": 272,
+    "placed_rate_all_items": 0.925602,
+    "unassigned_orders": 0,
+    "packing_time_sec": 3.733,
+    "warning_groups": 133,
+    "routes_summary": {
+      "vehicle_count": 5,
+      "total_distance_km": 274.448,
+      "total_cost": 1340.775
+    },
+    "route_solve_sec": 10.015845,
+    "constraint_validation": "passed"
+  },
+  {
+    "seed": "seed7",
+    "total_items": 3751,
+    "placed": 3285,
+    "unplaced": 466,
+    "placed_rate_all_items": 0.875766,
+    "unassigned_orders": 0,
+    "packing_time_sec": 5.048,
+    "warning_groups": 169,
+    "routes_summary": {
+      "vehicle_count": 4,
+      "total_distance_km": 280.79,
+      "total_cost": 1374.099
+    },
+    "route_solve_sec": 10.00353,
+    "constraint_validation": "passed"
+  }
+]

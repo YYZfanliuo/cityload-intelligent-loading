@@ -1,0 +1,22 @@
+[
+  {
+    "seed": "seed42",
+    "total": 3656,
+    "placed": 3550,
+    "unplaced": 106,
+    "placed_rate": 0.9710065645514223,
+    "packing_seconds": 4.739440300036222,
+    "warning_groups": 133,
+    "validation": "passed"
+  },
+  {
+    "seed": "seed7",
+    "total": 3751,
+    "placed": 3332,
+    "unplaced": 419,
+    "placed_rate": 0.888296454278859,
+    "packing_seconds": 5.508529599988833,
+    "warning_groups": 169,
+    "validation": "passed"
+  }
+]
