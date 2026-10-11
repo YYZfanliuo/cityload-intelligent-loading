@@ -1,0 +1,6 @@
+# T50 交互演示界面（Streamlit）附加依赖
+# 用法：先安装主依赖，再安装本文件
+#   pip install -r requirements.txt -r requirements-app.txt
+#   streamlit run app.py
+# 说明：>=1.50 为 width="stretch" 等新尺寸 API 的最低要求（本机实测 1.65）
+streamlit>=1.50
