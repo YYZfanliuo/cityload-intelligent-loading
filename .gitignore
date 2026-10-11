@@ -15,6 +15,10 @@ venv/
 # 确认无重建风险后可移除本规则）
 output/
 
+# ---- 临时运行产物（不入库）----
+# T50 交互界面动态生成（约 20MB），禁止提交
+outputs/app-tmp/
+
 # ---- 工具与 IDE ----
 .workbuddy/
 .DS_Store
