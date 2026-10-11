@@ -1,0 +1,19 @@
+{
+  "packing": {
+    "allow_rotation": true,
+    "rotation_axes": [
+      "lwh",
+      "wlh",
+      "hlw"
+    ],
+    "consider_fragile": true,
+    "consider_max_stack": true,
+    "gap_cm": 0.0
+  },
+  "routing": {
+    "respect_time_window": true,
+    "allow_overtime_penalty": true,
+    "overtime_penalty_per_min": 2.0,
+    "unassigned_penalty": 1000.0
+  }
+}
