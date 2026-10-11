@@ -9,17 +9,18 @@
 不引入 jinja2 等未声明依赖）。图片以**相对 outpath 的路径**引用；全页内联 CSS、
 无外部 CDN、无脚本，可离线直接打开。
 
-可选扩展（不改变函数签名）:
+可选扩展（契约 v1.2 §3.4 正式约定，不改变函数签名）:
 
-* ``metrics["comparison"]``（或 ``metrics["baseline"]``）为 dict 时，渲染
-  “优化 vs 基准”对比表格，否则整节自动跳过。约定结构::
+* ``metrics["comparison"]`` 为 dict 时，渲染“优化 vs 基准”对比表格，否则整节自动跳过。
+  结构（由窗口C 的 run.py 负责组装）::
 
       "comparison": {
           "baseline":  {"vehicle_count": 6, "total_distance_km": 324.1, ...},
           "optimized": {"vehicle_count": 5, "total_distance_km": 269.6, ...}
       }
 
-  ``optimized`` 缺省时取 ``metrics["metrics"]`` 本身；各指标键与 metrics.json §3.4 一致。
+  指标键与 metrics.json §3.4 的 ``metrics`` 子对象一致；``optimized`` 缺省时回退为
+  ``metrics["metrics"]`` 本身；``metrics["baseline"]`` 作为兼容旧键同样接受。
 
 车辆分组约定：``figure_paths`` 中 ``packing_V{n}.png`` / ``step_V{n}_{i}.png`` 的 n 为
 车辆序号（1-based，与 ``render_figures`` 一致）；第 n 辆车的指引文本取
