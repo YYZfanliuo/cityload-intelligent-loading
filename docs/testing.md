@@ -1,7 +1,7 @@
 # 测试记录与边界 case 清单（T33）
 
-> **状态**：进行中 —— 窗口B 负责汇总。E 侧补测已完成；C 侧 3 项边界与最终快照待窗口C 定稿后补测。
-> **最后更新**：2026-10-11 19:05（窗口B：E 侧补测 + 全量单测快照 commit `5498ae5`）
+> **状态**：进行中 —— 窗口B 负责汇总。E 侧补测与 3 项边界补测已完成；待 C 定稿后刷新快照并定稿。
+> **最后更新**：2026-10-11 19:35（窗口B：边界补测 #2——超载/易碎堆叠/运力不足 预跑全绿）
 
 ---
 
@@ -89,6 +89,22 @@ python -m pytest tests/ -v --tb=line
 > 该链路中 `metrics` 由真实 `eval/metrics.py` 计算 —— B/C/E 三方模块在 mock 层面已联通。
 > 待窗口C T25 `run.py` 完成后，用真实求解结果复跑端到端并更新本节。
 
+### 1.5 边界补测：超载 / 易碎堆叠 / 运力不足（T33 补测项 #2）✅
+
+> 口径：在**窗口C 当前工作树版本**上预跑（主规划安排，用于提前暴露问题），
+> 新增独立测试 `tests/test_edge_cases.py`（4 用例，35.8s，全绿）。
+> C 定稿后将在提交快照上随全量快照一并复跑。
+
+| 场景 | 用例 | 实测表现（2026-10-11 19:30） |
+|------|------|------------------------------|
+| 运力不足（1 辆 V01 装 5700kg） | test_insufficient_fleet_reports_unassigned | `partial`；19 单未分配如实上报；11 服务 + 19 未分配 = 30（不丢单）；载重不超限 |
+| 单订单超载（S01 放大至 5177.8kg） | test_overload_single_order_graceful | O0001 被拒（进 unassigned）；S01 不出现在任何 route；其余 29 单正常 |
+| 易碎品堆叠·真实数据 | test_fragile_not_compressed_real_data | 166 件已放置易碎品，几何独立验证 **0 违规**（无被压、无相交） |
+| 易碎品堆叠·压力场景 | test_fragile_pressure_never_stacked_illegally | 32 件大易碎箱单层放不下 → 部分合法拒装；**0 违规**；数量守恒 40/40 |
+
+> 附带观测：本次预跑装载完成率 **3550/3656 件（97.1%**，unplaced 106）—— 较 19:10 状态看板所记
+> 中间态（2346/3656）显著改善，窗口C 的 T12 攻关修复效果已在本次预跑中体现。
+
 ---
 
 ## 2. 边界 case 清单与实测记录
@@ -103,9 +119,9 @@ python -m pytest tests/ -v --tb=line
 | 3 | 空路由（无车出动） | pytest `test_case_c` | 全指标归零（vehicle_count=0、rates=0.0），不崩溃 | ✅ 已实测 |
 | 4 | 时间窗不满足（晚点） | pytest `test_case_b`（S02 16:30 到，窗 12:00–16:00） | on_time_rate 正确计 1/3，晚点停靠被识别 | ✅ 部分实测（算法侧软约束处理待补） |
 | 5 | 重复停靠（异常输入） | pytest `test_case_d` | 同店只计一次时效，不重复计数 | ✅ 已实测 |
-| 6 | 订单超载（单车载重 < 单订单重量） | 待窗口C solver 就绪后构造 2000kg 订单实测 | 待补 | ⏳ |
-| 7 | 易碎品堆叠冲突 | 待窗口C packing 就绪后实测（数据已含 33 行 fragile、40 行不可堆叠） | 待补 | ⏳ |
-| 8 | 车辆数不足导致订单未分配 | 待窗口C solver 就绪后实测 | 待补（指标侧计数已验：case_b） | ⏳ |
+| 6 | 订单超载（单订单 5.2t > 单车 1.7t） | `tests/test_edge_cases.py::test_overload_single_order_graceful` | **优雅**：该单进 `unassigned_orders`、不硬塞任何车；其余 29 单正常服务；0 崩溃 | ✅ 已实测 |
+| 7 | 易碎品堆叠冲突 | `test_fragile_not_compressed_real_data`（全链路 166 件易碎品几何验证）+ `test_fragile_pressure_never_stacked_illegally`（32 件单层放不下的压力场景） | **优雅**：0 几何违规（无压/无相交）；放不下的进 unplaced；数量守恒（40/40） | ✅ 已实测 |
+| 8 | 车辆数不足导致订单未分配 | `test_insufficient_fleet_reports_unassigned`（仅 1 辆 V01） | **优雅**：`partial` + 19 单未分配如实上报；不丢单（11 服务 + 19 未分配 = 30）；载重不超限 | ✅ 已实测 |
 | 9 | 渲染空输入（E 模块） | E 单测 `test_render_empty_inputs_do_not_crash` | 不抛异常，仍生成 route_map.png | ✅ 已实测 |
 | 10 | HTML 缺图降级（E 模块） | E 单测 `test_build_html_missing_figures_graceful` | 输出"未生成"占位提示，不崩溃 | ✅ 已实测 |
 
@@ -115,8 +131,8 @@ python -m pytest tests/ -v --tb=line
 
 - [x] ~~窗口E 端到端管线记录~~ ✅ 已完成（2026-10-11 19:05，见 1.4 节）
 - [x] ~~窗口C 单测运行记录~~ ✅ 部分完成（test_routing/test_packing 已入 1.3 快照；test_sequencing 待窗口C 提交后补）
-- [ ] 窗口C 最终版（T12 修复 + T13/T14/T25）提交后：**刷新全量快照**并在此更新
-- [ ] 窗口C 定稿后：补测边界 6/7/8（超载、易碎堆叠、运力不足），记录真实输出与优雅性判定
+- [x] ~~补测边界 6/7/8（超载、易碎堆叠、运力不足）~~ ✅ 已完成预跑（2026-10-11 19:30，见 1.5 节）
+- [ ] 窗口C 最终版（T12 修复 + T13/T14/T25）提交后：**刷新全量快照**（含 test_edge_cases.py 4 项）并定稿 T33
 - [ ] 数据泄漏/红线检查：README 数字须来自 experiments/results.md（主规划核对）
 
 ---
