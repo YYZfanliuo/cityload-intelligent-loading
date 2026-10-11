@@ -245,6 +245,8 @@ def build_html(routes: dict, metrics: dict, guide_text: dict, figure_paths: list
 ```json
 {
   "status": "ok",
+  "solve_time_sec": 12.3,
+  "peak_memory_mb": 180.2,
   "routes": [
     {
       "route_id": "R01",
@@ -264,6 +266,8 @@ def build_html(routes: dict, metrics: dict, guide_text: dict, figure_paths: list
   "summary": {"vehicle_count": 2, "total_distance_km": 78.5, "total_cost": 512.4}
 }
 ```
+
+> **性能字段约定**（v1.1 新增）：`solve_time_sec` 与 `peak_memory_mb` 必须由求解器在结果**顶层**输出；`compute_metrics` 会优先从 result 顶层读取这两个字段，缺失时按 0 计并在 metrics 中标注。`run.py` 主流程建议全程 `tracemalloc.start()` 以获取峰值内存。
 
 ### 3.2 `packing.json`
 
@@ -389,3 +393,4 @@ def build_html(routes: dict, metrics: dict, guide_text: dict, figure_paths: list
 | 日期 | 版本 | 变更 | 批准 |
 |------|------|------|------|
 | 2026-10-11 | v1.0 | 初始冻结 | 主规划窗口 |
+| 2026-10-11 | v1.1 | 3.1 节 routes.json 顶层新增 `solve_time_sec` / `peak_memory_mb` 性能字段（窗口C 必须输出，窗口B 的 compute_metrics 消费） | 主规划窗口（依窗口B 申请，17:15 批准） |
