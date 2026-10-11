@@ -1,0 +1,30 @@
+{
+  "vehicles": [
+    {
+      "vehicle_id": "V01",
+      "type": "4.2米厢式货车",
+      "max_weight_kg": 1700.0,
+      "cargo_length_cm": 420.0,
+      "cargo_width_cm": 200.0,
+      "cargo_height_cm": 200.0,
+      "count": 4,
+      "cost_per_km": 3.5,
+      "fixed_cost": 120.0,
+      "avg_speed_kmh": 30.0,
+      "max_work_minutes": 480
+    },
+    {
+      "vehicle_id": "V02",
+      "type": "依维柯",
+      "max_weight_kg": 1000.0,
+      "cargo_length_cm": 340.0,
+      "cargo_width_cm": 180.0,
+      "cargo_height_cm": 180.0,
+      "count": 3,
+      "cost_per_km": 2.8,
+      "fixed_cost": 80.0,
+      "avg_speed_kmh": 30.0,
+      "max_work_minutes": 480
+    }
+  ]
+}
