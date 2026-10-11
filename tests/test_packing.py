@@ -1,6 +1,7 @@
 import json
 from collections import Counter
 from itertools import permutations
+from math import fsum
 from pathlib import Path
 from random import Random
 
@@ -96,9 +97,6 @@ def validate(result, routes, orders, vehicles, rules):
                 assert supports, "非地板箱必须有完整支撑"
                 parents[idx] = supports[0]
                 assert b["layer"] == boxes[supports[0]]["layer"] + 1
-            if source["fragile"]:
-                assert p["z"] == max(c["position_cm"]["z"] for c in boxes)
-                assert b["layer"] == max(c["layer"] for c in boxes)
             if source["fragile"] or not source["stackable"]:
                 assert not any(c is not b and footprint_intersects(b, c) and
                                c["position_cm"]["z"] >= p["z"] + d["h"] for c in boxes)
@@ -114,6 +112,7 @@ def validate(result, routes, orders, vehicles, rules):
                     break
                 current = parents[current]
                 height += 1
+        weight = fsum(sources[b["order_id"], b["store_id"], b["sku"]]["weight_kg"] for b in boxes)
         assert weight <= spec["max_weight_kg"]
         expected_rate = round(weight / spec["max_weight_kg"], 4) if spec["max_weight_kg"] else 0.0
         assert packed["weight_utilization"] == expected_rate
@@ -163,16 +162,29 @@ def test_floor_rows_and_variable_heights():
     assert [b["position_cm"]["z"] for b in p["placed"]] == [0, 15, 23]
 
 
-def test_fragile_global_top_and_no_above_even_with_flags_off():
+def test_fragile_no_above_even_with_flags_off():
     p = scenario([item("normal", qty=2), item("fragile", qty=2, fragile=True)], size=(20, 10, 30),
                  packing={"consider_fragile": False})
-    assert len(p["placed"]) == 3 and len(p["unplaced"]) == 1
-    assert next(b for b in p["placed"] if b["sku"] == "fragile")["position_cm"]["z"] == 20
-    # 非易碎塔顶高度不同，不能在更低塔或地板上放易碎件。
+    assert len(p["placed"]) == 4 and not p["unplaced"]
+    assert {b["position_cm"]["z"] for b in p["placed"] if b["sku"] == "fragile"} == {0, 20}
+    # 易碎件可处于较低塔顶，不必与旁边不可堆叠的高箱统一平面。
     p = scenario([item("high", dims=(10, 10, 20), stackable=False),
                   item("low", dims=(10, 10, 10)), item("fragile", fragile=True)], size=(20, 10, 30))
-    assert [b["sku"] for b in p["unplaced"]] == ["fragile"]
+    assert len(p["placed"]) == 3 and not p["unplaced"]
+    assert next(b for b in p["placed"] if b["sku"] == "fragile")["position_cm"]["z"] == 10
     assert len(scenario([item(qty=3, fragile=True)], size=(20, 10, 30))["placed"]) == 2
+
+
+def test_fragile_max_one_uses_floor_without_pressure():
+    p = scenario([item("normal", qty=2),
+                  item("fragile", fragile=True, max_stack_layers=1)], size=(20, 10, 30))
+    assert len(p["placed"]) == 3 and not p["unplaced"]
+    fragile = next(b for b in p["placed"] if b["sku"] == "fragile")
+    assert fragile["position_cm"]["z"] == 0 and fragile["layer"] == 1
+    # 即使允许旋转且关闭易碎开关，易碎件也不能承压。
+    p = scenario([item("fragile", qty=3, fragile=True, max_stack_layers=1)], size=(10, 10, 30),
+                 packing={"allow_rotation": True, "consider_fragile": False})
+    assert len(p["placed"]) == 1 and len(p["unplaced"]) == 2
 
 
 @pytest.mark.parametrize("flags", [{"stackable": False}, {"max_stack_layers": 1}, {"max_stack_layers": 2}])
@@ -189,8 +201,10 @@ def test_limits_on_all_ancestors_and_new_item():
     assert len(p["unplaced"]) == 1
 
 
-def test_complete_support_rejects_overhang():
-    p = scenario([item("base", dims=(8, 8, 20)), item("wide", dims=(10, 10, 5))], size=(10, 10, 30))
+@pytest.mark.parametrize("fragile", [False, True])
+def test_complete_support_rejects_overhang(fragile):
+    p = scenario([item("base", dims=(8, 8, 20)),
+                  item("wide", dims=(10, 10, 5), fragile=fragile)], size=(10, 10, 30))
     assert len(p["placed"]) == 1 and p["unplaced"][0]["sku"] == "wide"
 
 
@@ -223,7 +237,7 @@ def test_gap_is_horizontal_and_support_is_in_contact():
     assert {b["position_cm"]["z"] for b in p["placed"]} == {0, 10}
 
 
-def test_fragile_pieces_share_global_highest_plane():
+def test_fragile_still_respects_support_height_and_stack_limits():
     p = scenario([item("base", qty=2, max_stack_layers=1),
                   item("fragile", qty=2, fragile=True)], size=(20, 10, 30))
     assert len(p["placed"]) == 2 and len(p["unplaced"]) == 2

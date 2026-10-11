@@ -1,6 +1,8 @@
 """确定性安全装箱：极大空矩形孔隙回收与单箱完整支撑。"""
 from __future__ import annotations
 
+from math import fsum
+
 
 def _orientations(item: dict, rules: dict):
     """按配置枚举六种轴排列；禁用旋转时仅保留原始方向。"""
@@ -28,7 +30,7 @@ def _overlap(a, b):
 
 
 def _pack_vehicle_legacy(items: list[dict], vehicle: dict, rules: dict):
-    """先装普通件，再装易碎件；任何不可行件逐件返回，不放宽安全约束。"""
+    """先装普通件，再装易碎件；易碎件只需无上方货物，不要求全车同高。"""
     L, W, H = (float(vehicle[k]) for k in ("cargo_length_cm", "cargo_width_cm", "cargo_height_cm"))
     capacity = float(vehicle["max_weight_kg"])
     gap = max(0.0, float(rules.get("packing", {}).get("gap_cm", 0.0)))
@@ -36,9 +38,6 @@ def _pack_vehicle_legacy(items: list[dict], vehicle: dict, rules: dict):
     used_weight = 0.0
     # 地板货架只管理二维占地；各堆垛的高度与层数独立维护。
     shelf_x = shelf_y = row_width = 0.0
-    normal_top = 0.0
-    normal_layer = 0
-    fragile_plane = None
     items = sorted(items, key=lambda i: (bool(i.get("fragile", False)),
                                          -float(i["length_cm"]) * float(i["width_cm"]) * float(i["height_cm"])))
     for item in items:
@@ -56,9 +55,6 @@ def _pack_vehicle_legacy(items: list[dict], vehicle: dict, rules: dict):
                     if (tower["remaining"] < 1 or depth > limit or
                             l > tower["l"] or w > tower["w"] or tower["top"] + h > H):
                         continue
-                    if fragile and (tower["top"] < normal_top or depth < normal_layer or
-                                    (fragile_plane is not None and (tower["top"], depth) != fragile_plane)):
-                        continue
                     choice = (rotated, l, w, h, tower["x"], tower["y"], tower["top"], depth, tower)
                     break
                 if choice is not None:
@@ -67,7 +63,7 @@ def _pack_vehicle_legacy(items: list[dict], vehicle: dict, rules: dict):
                 x, y, rw = shelf_x, shelf_y, row_width
                 if x + l > L:
                     x, y, rw = 0.0, y + rw + gap, 0.0
-                if y + w <= W and (not fragile or (normal_top == 0 and normal_layer == 0)):
+                if y + w <= W:
                     choice = (rotated, l, w, h, x, y, 0.0, 1, None)
                     next_shelf = (x + l + gap, y, max(rw, w))
                     break
@@ -89,14 +85,9 @@ def _pack_vehicle_legacy(items: list[dict], vehicle: dict, rules: dict):
             towers.append(tower)
         else:
             remaining = min(remaining, tower["remaining"] - 1)
-        if fragile:
-            fragile_plane = (z, depth)
         if fragile or not item.get("stackable", True):
             remaining = 0
         tower.update(l=l, w=w, top=z + h, depth=depth, remaining=remaining)
-        if not fragile:
-            normal_top = max(normal_top, z + h)
-            normal_layer = max(normal_layer, depth)
     volume = sum(b["size_placed_cm"]["l"] * b["size_placed_cm"]["w"] * b["size_placed_cm"]["h"] for b in placed)
     return placed, unplaced, volume / (L * W * H) if L * W * H else 0.0
 
@@ -141,7 +132,6 @@ def _pack_surfaces(items, vehicle, rules):
                  "rectangles": [(0.0, 0.0, L, W)], "ancestors": ()}]
     placed, unplaced = [], []
     used_weight = 0.0
-    normal_top, normal_layer, fragile_plane = 0.0, 0, None
     for item, orientations in prepared:
         weight = float(item.get("weight_kg", 0.0))
         fragile = bool(item.get("fragile", False))
@@ -155,9 +145,6 @@ def _pack_surfaces(items, vehicle, rules):
                     continue
                 if any(depth - ancestor_depth + 1 > ancestor_limit
                        for ancestor_depth, ancestor_limit in ancestors):
-                    continue
-                if fragile and (z < normal_top or depth < normal_layer or
-                                (fragile_plane is not None and (z, depth) != fragile_plane)):
                     continue
                 for rotated, (l, w, h) in orientations:
                     if min(l, w, h) <= 0 or z + h > H:
@@ -186,10 +173,6 @@ def _pack_surfaces(items, vehicle, rules):
             surfaces.append({"z": z + h, "depth": depth, "remaining": limit - 1,
                              "rectangles": [(x, y, l, w)],
                              "ancestors": (*surface["ancestors"], (depth, limit))})
-        if fragile:
-            fragile_plane = (z, depth)
-        else:
-            normal_top, normal_layer = max(normal_top, z + h), max(normal_layer, depth)
     volume = sum(b["size_placed_cm"]["l"] * b["size_placed_cm"]["w"] * b["size_placed_cm"]["h"] for b in placed)
     return placed, unplaced, volume / (L * W * H) if L * W * H else 0.0
 
@@ -217,7 +200,7 @@ def solve_packing(routes: dict, orders: dict, vehicles: dict, rules: dict) -> di
                     for _ in range(int(item.get("qty", 0))):
                         items.append({**item, "order_id": order["order_id"], "store_id": store})
         placed, unplaced, vol_rate = _pack_vehicle(items, vehicle, rules)
-        total_weight = sum(p["weight_kg"] for p in placed)
+        total_weight = fsum(p["weight_kg"] for p in placed)
         capacity = float(vehicle["max_weight_kg"])
         outputs.append({"vehicle_instance": f"{route['route_id']}-1", "vehicle_type": route["vehicle_type"],
                         "placed": placed, "unplaced": unplaced, "volume_utilization": round(vol_rate, 4),
