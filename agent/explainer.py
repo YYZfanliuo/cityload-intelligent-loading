@@ -19,7 +19,7 @@
 - 门店名（S07 → "连锁药店07"）懒加载自 data/orders.json（只读、失败静默，
   读不到时仅显示 store_id）；
 - 最先送达门店的"预计到达时间"从 routes.json 的 stop_details 中提取（可选增强）；
-- blocks_warning 非空时在指引末尾追加"装载提醒：..."文案；
+- blocks_warning 非空时在指引末尾追加提醒区：汇总句"装载提醒（共 N 条）："+ 逐条换行编号；
 - 全程不抛异常：结构非法返回 {"status": "error", ...}，单条计划异常跳过。
 """
 
@@ -172,7 +172,16 @@ def _count_items(items: Any) -> Optional[int]:
 
 
 def _warning_lines(warnings: Any) -> list[str]:
-    """把 blocks_warning 转为提醒文案行；空/非法则返回空列表。"""
+    """把 blocks_warning 转为提醒文案：汇总句（共 N 条）+ 逐条换行编号。
+
+    输出示例::
+
+        装载提醒（共 2 条）：
+        1. S05 的货物被后送门店 S01 的货物阻挡（上下压，9 对）；需调整装箱或在卸货时搬移，不能保证无翻箱卸货。
+        2. S08 的货物被后送门店 S05 的货物阻挡（车尾通道，507 对）；需调整装箱或在卸货时搬移，不能保证无翻箱卸货。
+
+    空/非法输入返回空列表；条目全部保留不截断。
+    """
     if not isinstance(warnings, list) or not warnings:
         return []
     parts: list[str] = []
@@ -182,7 +191,11 @@ def _warning_lines(warnings: Any) -> list[str]:
             parts.append(text)
     if not parts:
         return []
-    return ["装载提醒：" + "；".join(parts) + "。"]
+    lines = [f"装载提醒（共 {len(parts)} 条）："]
+    for i, p in enumerate(parts, 1):
+        suffix = "" if p.endswith(("。", "！", "？", "；")) else "。"
+        lines.append(f"{i}. {p}{suffix}")
+    return lines
 
 
 def _warning_text(w: Any) -> str:
@@ -322,6 +335,10 @@ def _validate_polish(original: str, polished: str) -> tuple[bool, str]:
         return False, f"门店编号丢失：{sorted(o_stores - p_stores)}"
     if ("装载提醒" in original) and ("装载提醒" not in polished):
         return False, "装载提醒行丢失"
+    m_o = re.search(r"装载提醒（共\s*(\d+)\s*条）", original)
+    m_p = re.search(r"装载提醒（共\s*(\d+)\s*条）", polished)
+    if m_o and (m_p is None or m_o.group(1) != m_p.group(1)):
+        return False, "装载提醒汇总结数不一致"
     if not (len(original) * 0.6 <= len(polished) <= len(original) * 1.8):
         return False, f"长度异常：{len(original)} -> {len(polished)}"
     return True, ""

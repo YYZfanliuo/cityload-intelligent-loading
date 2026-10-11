@@ -176,8 +176,22 @@ def test_qty_total_in_sentence():
 def test_blocks_warning_reminder():
     out = gen_guide_text(MOCK_PLAN, MOCK_ROUTES)
     text = out["guides"][0]["text"]
-    assert "装载提醒：" in text
-    assert "S03 的货物与 S01 存在堆叠冲突，请复核装载顺序" in text
+    assert "装载提醒（共 1 条）：" in text  # 汇总句
+    assert "1. S03 的货物与 S01 存在堆叠冲突，请复核装载顺序。" in text  # 逐条编号换行
+
+
+def test_warning_multi_entries_numbered():
+    """多条警告：汇总句条数正确、逐条编号 1..N 连续、每条独立一行。"""
+    plan = json.loads(json.dumps(MOCK_PLAN))
+    plan["plans"][0]["blocks_warning"] = ["风险甲", "风险乙", "风险丙"]
+    out = gen_guide_text(plan, MOCK_ROUTES)
+    text = out["guides"][0]["text"]
+    assert "装载提醒（共 3 条）：" in text
+    lines = text.splitlines()
+    warn_lines = [ln for ln in lines if re.match(r"^\d+\. ", ln)]
+    assert [ln.split(".", 1)[0] for ln in warn_lines] == ["1", "2", "3"]
+    assert warn_lines[0] == "1. 风险甲。"
+    assert warn_lines[2] == "3. 风险丙。"
 
 
 def test_no_warning_no_reminder():
@@ -390,6 +404,18 @@ def test_polish_call_error_falls_back(monkeypatch):
     assert out["source"] == "template_fallback"
     assert "call_failed" in out["detail"]
     assert out["text"] == POLISH_ORIGINAL
+
+
+def test_polish_reminder_count_mismatch_rejected(monkeypatch):
+    """润色篡改"共 N 条"汇总 → 校验拦截 → 回退模板原文。"""
+    monkeypatch.setenv("CITYLOAD_DISABLE_LLM", "0")
+    monkeypatch.setenv("CITYLOAD_LLM_API_KEY", "dummy-key")
+    original = "第 1 步：将 S01 的 3 件货物装入车厢内。\n装载提醒（共 2 条）：\n1. 风险甲。\n2. 风险乙。"
+    bad = "第 1 步：将 S01 的 3 件货物装入车厢内。\n装载提醒（共 3 条）：\n1. 风险甲。\n2. 风险乙。\n3. 风险丙。"
+    monkeypatch.setattr(explainer_mod, "_call_polish_llm", lambda text, cfg: bad)
+    out = polish_guide_text(original)
+    assert out["source"] == "template_fallback"
+    assert "汇总结数不一致" in out["detail"]
 
 
 def test_polish_invalid_input():
