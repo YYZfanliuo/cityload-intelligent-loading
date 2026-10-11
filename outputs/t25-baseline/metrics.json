@@ -9,8 +9,8 @@
     "avg_volume_utilization": 0.1083,
     "on_time_rate": 0.8667,
     "unassigned_order_count": 2,
-    "solve_time_sec": 0.746153,
-    "peak_memory_mb": 79.516,
+    "solve_time_sec": 0.714464,
+    "peak_memory_mb": 79.082,
     "total_item_count": 3656,
     "placed_item_count": 2759,
     "unplaced_item_count": 897
