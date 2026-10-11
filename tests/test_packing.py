@@ -194,6 +194,28 @@ def test_complete_support_rejects_overhang():
     assert len(p["placed"]) == 1 and p["unplaced"][0]["sku"] == "wide"
 
 
+def test_reclaims_floor_holes_without_overhang():
+    p = scenario([item("long", dims=(15, 10, 10), stackable=False),
+                  item("square", dims=(10, 10, 10), qty=2, stackable=False),
+                  item("small", dims=(5, 10, 10), stackable=False)], size=(20, 20, 10))
+    assert len(p["placed"]) == 4 and not p["unplaced"]
+
+
+def test_multiple_children_keep_complete_single_box_support():
+    p = scenario([item("base", dims=(20, 20, 10)),
+                  item("child", dims=(10, 10, 9), qty=4, stackable=False)], size=(20, 20, 20))
+    assert len(p["placed"]) == 5 and not p["unplaced"]
+    assert {b["layer"] for b in p["placed"] if b["sku"] == "child"} == {2}
+
+
+def test_branching_support_checks_shared_ancestor_limit():
+    p = scenario([item("base", dims=(20, 20, 10), max_stack_layers=2),
+                  item("middle", dims=(10, 10, 9), qty=4),
+                  item("top", dims=(10, 10, 8), qty=4)], size=(20, 20, 50))
+    assert len(p["placed"]) == 5 and len(p["unplaced"]) == 4
+    assert all(b["layer"] <= 2 for b in p["placed"])
+
+
 def test_gap_is_horizontal_and_support_is_in_contact():
     p = scenario([item(qty=5, max_stack_layers=2)], size=(21, 10, 20), packing={"gap_cm": 1})
     assert len(p["placed"]) == 4

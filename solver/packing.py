@@ -1,4 +1,4 @@
-"""确定性装箱启发式：地板货架与单箱完整支撑的独立堆垛。"""
+"""确定性安全装箱：极大空矩形孔隙回收与单箱完整支撑。"""
 from __future__ import annotations
 
 
@@ -27,7 +27,7 @@ def _overlap(a, b):
             ap["z"] < bp["z"] + bd["h"] and ap["z"] + ad["h"] > bp["z"])
 
 
-def _pack_vehicle(items: list[dict], vehicle: dict, rules: dict):
+def _pack_vehicle_legacy(items: list[dict], vehicle: dict, rules: dict):
     """先装普通件，再装易碎件；任何不可行件逐件返回，不放宽安全约束。"""
     L, W, H = (float(vehicle[k]) for k in ("cargo_length_cm", "cargo_width_cm", "cargo_height_cm"))
     capacity = float(vehicle["max_weight_kg"])
@@ -99,6 +99,106 @@ def _pack_vehicle(items: list[dict], vehicle: dict, rules: dict):
             normal_layer = max(normal_layer, depth)
     volume = sum(b["size_placed_cm"]["l"] * b["size_placed_cm"]["w"] * b["size_placed_cm"]["h"] for b in placed)
     return placed, unplaced, volume / (L * W * H) if L * W * H else 0.0
+
+
+def _split_rectangles(rectangles, x, y, l, w):
+    """扣除已占用区域并保留极大空矩形，不把孔隙丢给固定货架。"""
+    result = []
+    for rx, ry, rl, rw in rectangles:
+        if x >= rx + rl or x + l <= rx or y >= ry + rw or y + w <= ry:
+            result.append((rx, ry, rl, rw))
+            continue
+        if x > rx:
+            result.append((rx, ry, x - rx, rw))
+        if x + l < rx + rl:
+            result.append((x + l, ry, rx + rl - x - l, rw))
+        if y > ry:
+            result.append((rx, ry, rl, y - ry))
+        if y + w < ry + rw:
+            result.append((rx, y + w, rl, ry + rw - y - w))
+    unique = list(dict.fromkeys(result))
+    return [r for i, r in enumerate(unique) if not any(
+        i != j and s[0] <= r[0] and s[1] <= r[1] and
+        r[0] + r[2] <= s[0] + s[2] and r[1] + r[3] <= s[1] + s[3]
+        for j, s in enumerate(unique))]
+
+
+def _pack_surfaces(items, vehicle, rules):
+    """在地板及每个安全箱顶回收二维孔隙，所有上层仍由单箱完整支撑。"""
+    L, W, H = (float(vehicle[k]) for k in ("cargo_length_cm", "cargo_width_cm", "cargo_height_cm"))
+    capacity = float(vehicle["max_weight_kg"])
+    gap = max(0.0, float(rules.get("packing", {}).get("gap_cm", 0.0)))
+    prepared = [(item, list(_orientations(item, rules))) for item in items]
+
+    def order_key(entry):
+        """维持体积降序，普通件先装，避免易碎箱受压。"""
+        item, _ = entry
+        volume = float(item["length_cm"]) * float(item["width_cm"]) * float(item["height_cm"])
+        return (bool(item.get("fragile", False)), -volume)
+
+    prepared.sort(key=order_key)
+    surfaces = [{"z": 0.0, "depth": 0, "remaining": len(items),
+                 "rectangles": [(0.0, 0.0, L, W)], "ancestors": ()}]
+    placed, unplaced = [], []
+    used_weight = 0.0
+    normal_top, normal_layer, fragile_plane = 0.0, 0, None
+    for item, orientations in prepared:
+        weight = float(item.get("weight_kg", 0.0))
+        fragile = bool(item.get("fragile", False))
+        limit = int(item.get("max_stack_layers", 1))
+        choice = None
+        if weight >= 0 and used_weight + weight <= capacity and limit >= 1:
+            for si, surface in enumerate(surfaces):
+                z, depth = surface["z"], surface["depth"] + 1
+                ancestors = surface["ancestors"]
+                if depth > limit or surface["remaining"] < 1:
+                    continue
+                if any(depth - ancestor_depth + 1 > ancestor_limit
+                       for ancestor_depth, ancestor_limit in ancestors):
+                    continue
+                if fragile and (z < normal_top or depth < normal_layer or
+                                (fragile_plane is not None and (z, depth) != fragile_plane)):
+                    continue
+                for rotated, (l, w, h) in orientations:
+                    if min(l, w, h) <= 0 or z + h > H:
+                        continue
+                    for x, y, rl, rw in surface["rectangles"]:
+                        if l > rl or w > rw:
+                            continue
+                        # 先复用已有支撑面，足迹尽量小，空隙用短边最佳适配。
+                        score = (z == 0, l * w, min(rl - l, rw - w),
+                                 rl * rw - l * w, y, x, z, h, si)
+                        if choice is None or score < choice[0]:
+                            choice = (score, si, rotated, l, w, h, x, y, z, depth)
+        if choice is None:
+            unplaced.append({"sku": item["sku"], "order_id": item["order_id"],
+                             "store_id": item["store_id"], "qty": 1})
+            continue
+        _, si, rotated, l, w, h, x, y, z, depth = choice
+        surface = surfaces[si]
+        surface["rectangles"] = _split_rectangles(surface["rectangles"], x, y, l + gap, w + gap)
+        placed.append({"sku": item["sku"], "order_id": item["order_id"], "store_id": item["store_id"],
+                       "position_cm": {"x": x, "y": y, "z": z},
+                       "size_placed_cm": {"l": l, "w": w, "h": h},
+                       "layer": depth, "rotated": rotated, "weight_kg": weight})
+        used_weight += weight
+        if not fragile and item.get("stackable", True) and limit > 1:
+            surfaces.append({"z": z + h, "depth": depth, "remaining": limit - 1,
+                             "rectangles": [(x, y, l, w)],
+                             "ancestors": (*surface["ancestors"], (depth, limit))})
+        if fragile:
+            fragile_plane = (z, depth)
+        else:
+            normal_top, normal_layer = max(normal_top, z + h), max(normal_layer, depth)
+    volume = sum(b["size_placed_cm"]["l"] * b["size_placed_cm"]["w"] * b["size_placed_cm"]["h"] for b in placed)
+    return placed, unplaced, volume / (L * W * H) if L * W * H else 0.0
+
+
+def _pack_vehicle(items: list[dict], vehicle: dict, rules: dict):
+    """比较确定性安全启发式，按装下件数择优且保留原货架作为回退。"""
+    best = _pack_vehicle_legacy(items, vehicle, rules)
+    candidate = _pack_surfaces(items, vehicle, rules)
+    return candidate if len(candidate[0]) > len(best[0]) else best
 
 
 def solve_packing(routes: dict, orders: dict, vehicles: dict, rules: dict) -> dict:

@@ -14,6 +14,12 @@ def _interval_overlap(a, b, axis, size):
                bp + b["size_placed_cm"][size]) - max(ap, bp) > _EPS
 
 
+def _strict_overlap(a, b, axis, side):
+    """用于坐标修改安全门禁，接触面必须保持非正相交。"""
+    ap, bp = a["position_cm"][axis], b["position_cm"][axis]
+    return ap < bp + b["size_placed_cm"][side] and bp < ap + a["size_placed_cm"][side]
+
+
 def _blocks(placed, ranks):
     """按门店实际卸货时仍留车的货物检测；同店货物可以先卸顶部/外侧。"""
     blocks = Counter()
@@ -67,7 +73,17 @@ def sequence_loading(packing: dict, routes: dict, rules: dict) -> dict:
                 box["position_cm"]["x"] = (left + right - box["position_cm"]["x"]
                                              - box["size_placed_cm"]["l"])
             mirrored_blocks = _blocks(mirrored, ranks)
-            if sum(mirrored_blocks.values()) < sum(blocks.values()):
+            # 浮点镜像可能将接触面变成极小正相交；严格检查后才采用。
+            geometry_safe = True
+            for i, box in enumerate(mirrored):
+                for other in mirrored[i + 1:]:
+                    if all(_strict_overlap(box, other, axis, side)
+                           for axis, side in zip("xyz", "lwh")):
+                        geometry_safe = False
+                        break
+                if not geometry_safe:
+                    break
+            if geometry_safe and sum(mirrored_blocks.values()) < sum(blocks.values()):
                 for original, reflected in zip(placed, mirrored):
                     original["position_cm"]["x"] = reflected["position_cm"]["x"]
                 blocks = mirrored_blocks
