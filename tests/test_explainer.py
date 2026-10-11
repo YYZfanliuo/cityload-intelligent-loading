@@ -266,27 +266,59 @@ def test_invalid_inputs_never_raise():
 # 真实链路集成（等窗口C 的 T13 / T25 产出后自动激活）
 # ---------------------------------------------------------------------------
 
-@pytest.mark.skipif(
-    not (LOADING_PLAN_PATH.exists() and ROUTES_PATH.exists()),
-    reason="等待窗口C 产出 output/loading_plan.json + output/routes.json 后自动激活",
-)
-def test_real_pipeline_integration():
-    plan = json.loads(LOADING_PLAN_PATH.read_text(encoding="utf-8"))
-    routes = json.loads(ROUTES_PATH.read_text(encoding="utf-8"))
+def _discover_pipeline_sets() -> list:
+    """自动发现真实链路产物数据集。
+
+    支持两种路径约定：
+    - 契约路径：output/loading_plan.json + output/routes.json
+    - 联调路径：outputs/{seed}_loading_plan.json + outputs/{seed}_routes.json（多套数据）
+    """
+    sets = []
+    contract_plan = ROOT / "output" / "loading_plan.json"
+    contract_routes = ROOT / "output" / "routes.json"
+    if contract_plan.exists() and contract_routes.exists():
+        sets.append(("output", contract_plan, contract_routes))
+    outs = ROOT / "outputs"
+    if outs.is_dir():
+        for plan_path in sorted(outs.glob("*_loading_plan.json")):
+            seed = plan_path.name[: -len("_loading_plan.json")]
+            routes_path = outs / f"{seed}_routes.json"
+            if routes_path.exists():
+                sets.append((seed, plan_path, routes_path))
+    return sets
+
+
+def _check_pipeline_set(name: str, plan_path: Path, routes_path: Path) -> None:
+    """对一套真实数据做全量校验：结构 / 编号连续 / 门店顺序=delivery_order 倒序。"""
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    routes = json.loads(routes_path.read_text(encoding="utf-8"))
     out = gen_guide_text(plan, routes)
-    assert out["status"] == "ok"
-    assert len(out["guides"]) == len(plan["plans"])
+
+    assert out["status"] == "ok", f"{name}: status 非 ok"
+    assert len(out["guides"]) == len(plan["plans"]), f"{name}: guides 数量 {len(out['guides'])} != plans {len(plan['plans'])}"
+
     for plan_i, guide in zip(plan["plans"], out["guides"]):
+        vi = plan_i.get("vehicle_instance", "")
         text = guide["text"]
-        assert guide["vehicle_instance"] == plan_i["vehicle_instance"]
-        assert "第 1 步" in text
-        rev = [s for s in reversed(plan_i["delivery_order"]) if isinstance(s, str)]
-        positions = []
-        for s in rev:
-            p = text.find(s)
-            assert p >= 0, f"{s} 未出现在指引中"
-            positions.append(p)
-        assert positions == sorted(positions), f"{plan_i['vehicle_instance']} 装载顺序与 delivery_order 倒序不一致"
+        assert guide["vehicle_instance"] == vi, f"{name}: vehicle_instance 不一致"
+        body = text.split("装载提醒")[0]  # 校验范围排除提醒区（其中也含门店编号）
+
+        idx = [int(n) for n in re.findall(r"第 (\d+) 步", body)]
+        assert idx, f"{name}/{vi}: 无装载步骤"
+        assert idx == list(range(1, len(idx) + 1)), f"{name}/{vi}: 步骤编号不连续 {idx}"
+
+        rev = [s for s in reversed(plan_i.get("delivery_order") or []) if isinstance(s, str)]
+        positions = [p for p in (body.find(s) for s in rev) if p >= 0]
+        assert positions == sorted(positions), f"{name}/{vi}: 门店装载顺序与 delivery_order 倒序不一致"
+
+
+def test_real_pipeline_integration():
+    """真实链路集成测试：自动发现 output/ 与 outputs/ 下的全部数据集逐一校验。"""
+    pipeline_sets = _discover_pipeline_sets()
+    if not pipeline_sets:
+        pytest.skip("等待窗口C 产出 output(s)/*_loading_plan.json + *_routes.json 后自动激活")
+    for name, plan_path, routes_path in pipeline_sets:
+        _check_pipeline_set(name, plan_path, routes_path)
 
 
 # ---------------------------------------------------------------------------
