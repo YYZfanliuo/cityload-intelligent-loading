@@ -156,7 +156,7 @@
   <div class="wrap">
     <p class="eyebrow">TRACK 02 · AI＋物流 · 城市配送智能配载</p>
     <h1>智载 CityLoad —— 城市配送智能配载方案</h1>
-    <p class="sub">场景：城市连锁药店配送（中心仓 → 门店） ｜ seed=42 ｜ 32 张图件 ｜ 生成时间 2026-10-11 20:50</p>
+    <p class="sub">场景：城市连锁药店配送（中心仓 → 门店） ｜ seed=42 ｜ 32 张图件 ｜ 生成时间 2026-10-12 13:17</p>
   </div>
 </header>
 
@@ -170,7 +170,7 @@
 
   <section class="card">
     <h2>2 · 核心指标</h2>
-    <p class="perf">求解耗时 2.26 s · 峰值内存 84.2 MB · 平均体积利用率 19.3% · 货物装载 3591/3656 件（装下率 98.2%）</p>
+    <p class="perf">求解耗时 3.62 s · 峰值内存 85.0 MB · 平均体积利用率 19.3% · 货物装载 3591/3656 件（装下率 98.2%）</p>
     <div class="kpis"><div class="kpi"><div class="v">6<small> 辆</small></div><div class="l">车辆数（车次）</div></div><div class="kpi"><div class="v">287.1<small> km</small></div><div class="l">总里程</div></div><div class="kpi"><div class="v">¥1515.07</div><div class="l">总成本</div></div><div class="kpi"><div class="v">70.2%</div><div class="l">平均载重装载率</div></div><div class="kpi"><div class="v">100.0%</div><div class="l">时效达成率</div></div></div>
   </section>
 
@@ -195,7 +195,7 @@
 
   <section class="card notes">
     <h2>7 · 数据来源与说明</h2>
-    <ul><li>数据来源：模拟数据集（seed=42，单一中心仓 + 连锁药店场景），由 data/gen_data.py 生成、data/validate.py 校验，字节级可复现；不含任何真实企业数据。</li><li>求解与评估：路径规划为 OR-Tools CVRPTW；装箱为 3D 启发式（重不压轻、易碎置顶）；全部指标由 eval/metrics.py 计算，与本报告数字同源。</li><li>图件生成：matplotlib 静态渲染（route_map / packing_V* / step_V*）；本页为离线单页 HTML（内联 CSS、无外部 CDN、无脚本）。</li><li>求解性能（本机实测）：求解耗时 2.26 秒、峰值内存 84.2 MB。</li></ul><p><b>限制说明</b></p><ul><li>本报告为算法输出的静态快照，非实时调度系统；未接入实时路况与突发订单。</li><li>时间窗遵守基于平均车速估算，未模拟随机延误；实际执行请预留缓冲。</li><li>3D 装载图为自动装箱结果的示意，不替代现场装卸安全规范。</li><li>当前范围未覆盖多仓协同、冷链温控、退货回收等衍生场景（见 README 限制章节）。</li></ul>
+    <ul><li>数据来源：模拟数据集（seed=42，单一中心仓 + 连锁药店场景），由 data/gen_data.py 生成、data/validate.py 校验，字节级可复现；不含任何真实企业数据。</li><li>求解与评估：路径规划为 OR-Tools CVRPTW；装箱为 3D 启发式（重不压轻、易碎置顶）；全部指标由 eval/metrics.py 计算，与本报告数字同源。</li><li>图件生成：matplotlib 静态渲染（route_map / packing_V* / step_V*）；本页为离线单页 HTML（内联 CSS、无外部 CDN、无脚本）。</li><li>求解性能（本机实测）：求解耗时 3.62 秒、峰值内存 85.0 MB。</li></ul><p><b>限制说明</b></p><ul><li>本报告为算法输出的静态快照，非实时调度系统；未接入实时路况与突发订单。</li><li>时间窗遵守基于平均车速估算，未模拟随机延误；实际执行请预留缓冲。</li><li>3D 装载图为自动装箱结果的示意，不替代现场装卸安全规范。</li><li>当前范围未覆盖多仓协同、冷链温控、退货回收等衍生场景（见 README 限制章节）。</li></ul>
   </section>
 </main>
 
