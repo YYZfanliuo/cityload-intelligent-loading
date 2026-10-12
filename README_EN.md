@@ -21,7 +21,11 @@
 
 ## 1. Team
 
-> **【To be filled before submission】** Team name / members & roles / contact (resume optional).
+- **Team name**: Deepsleep
+- **Team lead**: Yan Yizhuo (闫燚卓) — Project development coordination
+- **Members**: Zhang Xian (张弦) — Algorithm planning & security testing; Chen Jiaxuan (陈嘉轩) — Development support
+
+> Built by the team with AI coding tools: team members made the architectural decisions, algorithm design, quality acceptance and compliance; AI assistants contributed to code implementation and testing. All code and experimental evidence are included in this repository.
 
 ## 2. Business Scenario
 
