@@ -51,6 +51,9 @@ APP_TMP = ROOT / "outputs" / "app-tmp"
 #: 扩展档案存储目录（T50e：新增门店 / 商品；会话持久，不动 data/ 原始数据集）
 CATALOG_EXT = APP_TMP / "catalog-ext"
 
+#: T50h：多行下单的行数上限（防误粘贴超大文本；文案经 {max} 参数引用，单一事实来源）
+MAX_MULTI_LINES = 50
+
 #: 自然语言下单内置示例（解析器当前支持中文输入；按钮文案即示例文本）
 #: 门店均为当前数据集门店库内门店（连锁药店01–30），可完整体验 T50d 端到端串联
 NL_EXAMPLES = [
@@ -108,10 +111,11 @@ STRINGS = {
         "row_unassigned": "未分配订单数",
         "row_fill_rate": "货物装下率",
         "route_map_title": "配送路线图",
-        "packing_title": "各车厢 3D 装载图",
+        "packing_title": "车厢装载图（按车分组）",
         "packing_caption": "{instance} 车厢 3D 装载图",
+        "vg_group": "车 {idx} · {instance}（{vtype}）",
         "guide_title": "分步装卸指引（{n} 辆车，文字版）",
-        "step_title": "分步装载示意（{n} 张，每车最多 5 张）",
+        "step_title": "分步装载示意（{n} 张）",
         "step_caption": "{instance} · 分步示意 {shot}",
         "llm_title": "LLM 增强（可选）",
         "llm_key_notice": "API Key 仅保存在本次会话内存中，不写入磁盘、不回显。",
@@ -195,7 +199,7 @@ STRINGS = {
         "nl_tab_multi": "多单独立场景（新建）",
         "multi_note": "与「单条插单」的区别：此处把解析出的多张订单构建为一个独立小场景（仅含这些门店），"
                       "从零规划路线与装载，不受 30 店大场景影响。门店坐标取自基础 / 扩展档案，路网现场重算。",
-        "multi_label": "多行下单需求（每行一单，最多 12 行）",
+        "multi_label": "多行下单需求（每行一单，最多 {max} 行）",
         "multi_fill": "填入内置示例（6 单）",
         "multi_run": "解析全部并构建独立场景",
         "multi_spinner": "正在解析并构建独立场景（约 10～30 秒）…",
@@ -212,7 +216,7 @@ STRINGS = {
         "multi_err_sku": "第 {idx} 行：商品「{name}」缺少物理参数（请先在数据档案建档）",
         "multi_no_valid": "没有可用的订单行：请检查输入后重试。",
         "multi_empty": "请输入至少一行下单需求。",
-        "multi_too_many": "行数过多（{n} 行）：MVP 最多支持 12 行。",
+        "multi_too_many": "行数过多（{n} 行）：最多支持 {max} 行。",
         "multi_ok": "独立场景已生成：{n} 单 / {m} 家门店 / {v} 辆车。",
         "footer": "运行产物默认写入 outputs/app-tmp/（隔离目录），不覆盖已入库的 t25-final / t25-baseline。"
                   "命令行等效入口：python run.py --data data/ --out outputs/t25-final --comparison",
@@ -255,10 +259,11 @@ STRINGS = {
         "row_unassigned": "Unassigned Orders",
         "row_fill_rate": "Item Fill Rate",
         "route_map_title": "Delivery Route Map",
-        "packing_title": "3D Loading Layout per Vehicle",
+        "packing_title": "Vehicle Loading Figures (grouped by vehicle)",
         "packing_caption": "{instance} — 3D cargo layout",
+        "vg_group": "Vehicle {idx} · {instance} ({vtype})",
         "guide_title": "Step-by-step Loading Guide ({n} vehicles, text)",
-        "step_title": "Loading Step Illustrations ({n} figures, ≤5 per vehicle)",
+        "step_title": "Loading Step Illustrations ({n} figures)",
         "step_caption": "{instance} · step {shot}",
         "llm_title": "LLM Enhancement (optional)",
         "llm_key_notice": "Your API key is kept only in this session's memory — never written to disk, never echoed.",
@@ -349,7 +354,7 @@ STRINGS = {
         "multi_note": "Unlike \"single order\", here the parsed orders build a standalone mini-scene "
                       "(only these stores) — routed and packed from scratch, independent of the 30-store "
                       "scene. Store coordinates come from the base/extended catalog; the network is rebuilt.",
-        "multi_label": "Order requests, one per line (up to 12 lines)",
+        "multi_label": "Order requests, one per line (up to {max} lines)",
         "multi_fill": "Fill built-in example (6 orders)",
         "multi_run": "Parse all and build standalone scene",
         "multi_spinner": "Parsing and building the standalone scene (about 10–30 s)...",
@@ -366,7 +371,7 @@ STRINGS = {
         "multi_err_sku": "Line {idx}: item \"{name}\" lacks physical parameters (add it in the catalog)",
         "multi_no_valid": "No usable order lines — please check the input.",
         "multi_empty": "Please enter at least one order line.",
-        "multi_too_many": "Too many lines ({n}): the MVP supports up to 12.",
+        "multi_too_many": "Too many lines ({n}): up to {max} lines.",
         "multi_ok": "Standalone scene built: {n} orders / {m} stores / {v} vehicles.",
         "footer": "Artifacts are written to outputs/app-tmp/ (isolated); t25-final / t25-baseline "
                   "are never overwritten. CLI equivalent: "
@@ -392,24 +397,34 @@ def t(key: str, **kw) -> str:
 
 
 def _group_figures(figures: list[Path], packing: dict) -> dict:
-    """把管线图件路径按类型分组（T50g 抽取，主流程与 NL 流程共用）。
+    """把管线图件路径按类型分组（T50g 抽取，主流程与 NL 流程共用；T50h 附带车型）。
 
-    返回 ``{"route_map": Path|None, "packing_figs": [(Path, instance)],
-    "step_figs": [(Path, instance, shot)]}``；
+    返回 ``{"route_map": Path|None, "packing_figs": [(Path, instance, vtype)],
+    "step_figs": [(Path, instance, shot, vtype)]}``；
     文件名中的 ``V{n}`` 按 packing["vehicles"] 出现序号映射为真实车辆编号（如 R04-1）。
     """
-    instances = [v.get("vehicle_instance", "") for v in (packing or {}).get("vehicles", [])]
+    vehicles = (packing or {}).get("vehicles") or []
+    instances = [v.get("vehicle_instance", "") for v in vehicles]
+    vtypes = [v.get("vehicle_type", "") for v in vehicles]
 
-    def _instance(path: Path) -> str:
+    def _meta(path: Path) -> tuple[str, str]:
         m = re.fullmatch(r"(?:packing|step)_V(\d+)(?:_\d+)?\.png", path.name)
         if m and 1 <= int(m.group(1)) <= len(instances):
-            return instances[int(m.group(1)) - 1]
-        return path.stem
+            k = int(m.group(1)) - 1
+            return instances[k], vtypes[k]
+        return path.stem, ""
 
     route_map = next((p for p in figures if p.name == "route_map.png"), None)
-    packing_figs = [(p, _instance(p)) for p in figures if p.name.startswith("packing_")]
-    step_figs = [(p, _instance(p), int(re.search(r"_(\d+)\.png$", p.name).group(1)))
-                 for p in figures if p.name.startswith("step_")]
+    packing_figs = []
+    step_figs = []
+    for p in figures:
+        if p.name.startswith("packing_"):
+            inst, vtype = _meta(p)
+            packing_figs.append((p, inst, vtype))
+        elif p.name.startswith("step_"):
+            inst, vtype = _meta(p)
+            shot = int(re.search(r"_(\d+)\.png$", p.name).group(1))
+            step_figs.append((p, inst, shot, vtype))
     return {"route_map": route_map, "packing_figs": packing_figs, "step_figs": step_figs}
 
 
@@ -425,8 +440,8 @@ def execute(seed_key: str, data_dir: str, comparison: bool) -> dict:
         "metrics": result["metrics"].get("metrics", {}),
         "comparison": result["metrics"].get("comparison"),
         "route_map": str(groups["route_map"]) if groups["route_map"] else None,
-        "packing_figs": [(inst, str(p)) for p, inst in groups["packing_figs"]],
-        "step_figs": [(inst, shot, str(p)) for p, inst, shot in groups["step_figs"]],
+        "packing_figs": [(inst, str(p), vt) for p, inst, vt in groups["packing_figs"]],
+        "step_figs": [(inst, shot, str(p), vt) for p, inst, shot, vt in groups["step_figs"]],
         "guides": result["guide_text"].get("guides", []),
         "out_dir": str(out_dir),
         "figure_count": len(figures),
@@ -571,27 +586,35 @@ def _comparison_rows(comp: dict) -> list[dict]:
     return rows
 
 
-def _render_packing_gallery(packing_figs: list) -> None:
-    """车厢 3D 装载图区（两列网格）。主界面与 NL 流程（插单/多单）共用。"""
-    if not packing_figs:
+def _render_vehicle_galleries(packing_figs: list, step_figs: list) -> None:
+    """按车分组的装载图区（T50h）：每车一个可折叠分组（子标题含车次与车型，如
+    “车 1 · R01-1（V01）”），组内组织该车的 3D 装载总图 + 分步装载图。
+    主界面与 NL 流程（插单/多单）共用，展示方式保持一致。
+
+    输入元组：packing_figs=[(instance, path, vtype)]、step_figs=[(instance, shot, path, vtype)]。
+    """
+    groups: dict = {}
+    for instance, path, vtype in packing_figs:
+        groups.setdefault(instance, {"vtype": vtype, "packing": None, "steps": []})["packing"] = path
+    for instance, shot, path, vtype in step_figs:
+        g = groups.setdefault(instance, {"vtype": vtype, "packing": None, "steps": []})
+        g["steps"].append((shot, path))
+    if not groups:
         return
+
     st.subheader(t("packing_title"))
-    cols = st.columns(2)
-    for i, (instance, path) in enumerate(packing_figs):
-        with cols[i % 2]:
-            st.image(path, caption=t("packing_caption", instance=instance), width="stretch")
-
-
-def _render_step_gallery(step_figs: list) -> None:
-    """分步装载示意图区（三列网格，置于折叠面板内）。主界面与 NL 流程共用。"""
-    if not step_figs:
-        return
-    with st.expander(t("step_title", n=len(step_figs))):
-        cols = st.columns(3)
-        for i, (instance, shot, path) in enumerate(step_figs):
-            with cols[i % 3]:
-                st.image(path, caption=t("step_caption", instance=instance, shot=shot),
+    for idx, (instance, g) in enumerate(groups.items(), start=1):
+        with st.expander(t("vg_group", idx=idx, instance=instance, vtype=g["vtype"] or "—")):
+            if g["packing"]:
+                st.image(g["packing"], caption=t("packing_caption", instance=instance),
                          width="stretch")
+            if g["steps"]:
+                st.markdown(f"**{t('step_title', n=len(g['steps']))}**")
+                cols = st.columns(3)
+                for i, (shot, path) in enumerate(sorted(g["steps"], key=lambda x: x[0])):
+                    with cols[i % 3]:
+                        st.image(path, caption=t("step_caption", instance=instance, shot=shot),
+                                 width="stretch")
 
 
 def _render_result(r: dict) -> None:
@@ -613,13 +636,11 @@ def _render_result(r: dict) -> None:
         st.subheader(t("route_map_title"))
         st.image(r["route_map"], width="stretch")
 
-    _render_packing_gallery(r["packing_figs"])
+    _render_vehicle_galleries(r["packing_figs"], r["step_figs"])
 
     if r["guides"]:
         with st.expander(t("guide_title", n=len(r["guides"]))):
             _render_guides(r["guides"])
-
-    _render_step_gallery(r["step_figs"])
 
 
 # ---------------------------------------------------------------- 指引润色 / 自然语言下单
@@ -1018,8 +1039,8 @@ def _merge_and_run(parsed: dict, seed_key: str) -> dict:
         "route_info": route_info,
         "metrics": result["metrics"].get("metrics") or {},
         "route_map": str(groups["route_map"]) if groups["route_map"] else None,
-        "packing_figs": [(inst, str(p)) for p, inst in groups["packing_figs"]],
-        "step_figs": [(inst, shot, str(p)) for p, inst, shot in groups["step_figs"]],
+        "packing_figs": [(inst, str(p), vt) for p, inst, vt in groups["packing_figs"]],
+        "step_figs": [(inst, shot, str(p), vt) for p, inst, shot, vt in groups["step_figs"]],
         "out_dir": str(out_dir),
     }
 
@@ -1072,15 +1093,14 @@ def _render_merged_result(m: dict) -> None:
         st.markdown(f"**{t('merge_route_title')}**")
         st.image(m["route_map"], width="stretch")
 
-    # T50g：补展示车厢 3D 装载图 + 分步装载图；新订单所在车辆的图优先排列
+    # T50h：按车分组展示（3D 总图 + 分步图）；新订单所在车辆的组优先排列
     packing_figs = list(m.get("packing_figs") or [])
     step_figs = list(m.get("step_figs") or [])
     rid = str((info or {}).get("route_id") or "")
     if rid:
         packing_figs.sort(key=lambda x: 0 if str(x[0]).startswith(rid) else 1)
         step_figs.sort(key=lambda x: 0 if str(x[0]).startswith(rid) else 1)
-    _render_packing_gallery(packing_figs)
-    _render_step_gallery(step_figs)
+    _render_vehicle_galleries(packing_figs, step_figs)
 
 
 # ---------------------------------------------------------------- 数据档案 UI（T50e）
@@ -1241,7 +1261,7 @@ def _build_independent_scene(text: str, seed_key: str) -> dict:
     lines = [ln.strip() for ln in str(text or "").splitlines() if ln.strip()]
     if not lines:
         return {"error": "empty"}
-    if len(lines) > 12:
+    if len(lines) > MAX_MULTI_LINES:
         return {"error": "too_many", "count": len(lines)}
 
     data_dir = Path(DATASETS[seed_key]["dir"])
@@ -1344,8 +1364,8 @@ def _build_independent_scene(text: str, seed_key: str) -> dict:
         "route_of": route_of,
         "metrics": result["metrics"].get("metrics") or {},
         "route_map": str(groups["route_map"]) if groups["route_map"] else None,
-        "packing_figs": [(inst, str(p)) for p, inst in groups["packing_figs"]],
-        "step_figs": [(inst, shot, str(p)) for p, inst, shot in groups["step_figs"]],
+        "packing_figs": [(inst, str(p), vt) for p, inst, vt in groups["packing_figs"]],
+        "step_figs": [(inst, shot, str(p), vt) for p, inst, shot, vt in groups["step_figs"]],
         "out_dir": str(out_dir),
     }
 
@@ -1355,7 +1375,7 @@ def _render_multi_tab(seed_key: str) -> None:
     st.caption(t("multi_note"))
     if st.button(t("multi_fill"), key="multi_fill"):
         st.session_state["multi_text"] = "\n".join(MULTI_EXAMPLES)
-    multi_text = st.text_area(t("multi_label"), key="multi_text", height=150,
+    multi_text = st.text_area(t("multi_label", max=MAX_MULTI_LINES), key="multi_text", height=150,
                               placeholder=MULTI_EXAMPLES[0])
     if st.button(t("multi_run"), type="primary", key="multi_build"):
         with st.spinner(t("multi_spinner")):
@@ -1378,7 +1398,7 @@ def _render_multi_result(mr: dict) -> None:
         st.warning(t("multi_empty"))
         return
     if err == "too_many":
-        st.warning(t("multi_too_many", n=mr.get("count")))
+        st.warning(t("multi_too_many", n=mr.get("count"), max=MAX_MULTI_LINES))
         return
     if err == "no_valid":
         st.warning(t("multi_no_valid"))
@@ -1423,9 +1443,9 @@ def _render_multi_result(mr: dict) -> None:
         st.markdown(f"**{t('merge_route_title')}**")
         st.image(mr["route_map"], width="stretch")
 
-    # T50g：补展示车厢 3D 装载图 + 分步装载图（新样式）
-    _render_packing_gallery(list(mr.get("packing_figs") or []))
-    _render_step_gallery(list(mr.get("step_figs") or []))
+    # T50h：按车分组展示（3D 总图 + 分步图，新样式）
+    _render_vehicle_galleries(list(mr.get("packing_figs") or []),
+                              list(mr.get("step_figs") or []))
 
 
 # ---------------------------------------------------------------- 主界面

@@ -326,3 +326,37 @@ def test_app_t50g_multi_scene_shows_cargo_figures(monkeypatch):
     captions = [c for img in at.image for c in (img.captions or [])]
     assert [c for c in captions if "车厢 3D 装载图" in c], "多单场景应展示车厢 3D 装载图"
     assert [c for c in captions if "分步示意" in c], "多单场景应展示分步装载图"
+
+
+def test_app_t50h_multi_line_limit(monkeypatch):
+    """T50h：多行上限 12→50——常量=50，51 行被拒绝（快速路径，不触发管线）。"""
+    _clear_llm_env(monkeypatch)
+    import app
+
+    assert app.MAX_MULTI_LINES == 50
+    lines = "\n".join(["明天上午给连锁药店03送 4 箱感冒灵"] * 51)
+    r = app._build_independent_scene(lines, "seed42")
+    assert r["error"] == "too_many" and r["count"] == 51
+
+
+def test_app_t50h_multi_13_lines_flow(monkeypatch):
+    """T50h：13 行（旧上限 12 的溢出样例）现在可正常构建独立场景。"""
+    _clear_llm_env(monkeypatch)
+    import app
+
+    lines = "\n".join(f"明天上午给连锁药店{6 + i % 6:02d}送 1 箱感冒灵" for i in range(13))
+    r = app._build_independent_scene(lines, "seed42")
+    assert r["error"] is None, r
+    assert r["orders"], "应至少解析出一单"
+
+
+def test_app_t50h_vehicle_grouping(monkeypatch):
+    """T50h：装载图按车分组——主流程分组标题形如“车 1 · R01-1（V01）”，组内含 3D 总图 + 分步图。"""
+    _clear_llm_env(monkeypatch)
+    at = _run_flow()
+    _click_and_check(at, "车辆数")
+    labels = [e.label for e in at.get("expander")]
+    assert any(l.startswith("车 1 · R01-1") for l in labels), labels[:10]
+    captions = [c for img in at.image for c in (img.captions or [])]
+    assert [c for c in captions if "车厢 3D 装载图" in c], "组内应含 3D 总图"
+    assert [c for c in captions if "分步示意" in c], "组内应含分步图"

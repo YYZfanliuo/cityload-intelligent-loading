@@ -32,7 +32,7 @@ def test_render_figures_contract(tmp_path):
 
 
 def test_step_shot_count_bounded(tmp_path):
-    """每车分步图不超过 5 张，且与实际装载步骤数一致（mock：R01 两步 / R02 一步）。"""
+    """每车分步图不超过 8 张（T50h 上限），且与实际装载步骤数一致（mock：R01 两步 / R02 一步）。"""
     bundle = mini_bundle()
     out = render_figures(bundle["routes"], bundle["packing"], bundle["loading_plan"],
                          bundle["network"], str(tmp_path))
@@ -40,7 +40,20 @@ def test_step_shot_count_bounded(tmp_path):
     v01 = [n for n in names if n.startswith("step_V01_")]
     v02 = [n for n in names if n.startswith("step_V02_")]
     assert len(v01) == 2 and len(v02) == 1
-    assert len(v01) <= 5 and len(v02) <= 5
+    assert len(v01) <= 8 and len(v02) <= 8
+
+
+def test_step_index_sampling_capped_at_8():
+    """T50h：步骤数多于 8 时分步图恰为 8 张（首尾步均含、采样无重复单调）。"""
+    from report.render import _MAX_STEP_SHOTS, _select_step_indices
+
+    assert _MAX_STEP_SHOTS == 8
+    idx = _select_step_indices(20, _MAX_STEP_SHOTS)
+    assert len(idx) == 8
+    assert idx[0] == 0 and idx[-1] == 19
+    assert idx == sorted(set(idx))
+    assert len(_select_step_indices(12, _MAX_STEP_SHOTS)) == 8
+    assert _select_step_indices(3, _MAX_STEP_SHOTS) == [0, 1, 2]  # 不足 8 步全出
 
 
 def test_render_empty_inputs_do_not_crash(tmp_path):

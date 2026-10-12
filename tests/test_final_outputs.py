@@ -88,3 +88,24 @@ def test_final_item_counts_consistent():
     for key in ("total_item_count", "placed_item_count", "unplaced_item_count"):
         assert isinstance(m.get(key), int), f"缺 v1.3 字段 {key}"
     assert m["total_item_count"] == m["placed_item_count"] + m["unplaced_item_count"]
+
+
+def test_step_figures_capped_at_8():
+    """T50h：每车分步图 ≤8 张，且与 loading_plan 步骤数精确一致（min(steps, 8)）。"""
+    fm = FINAL / "packing.json"
+    fp = FINAL / "loading_plan.json"
+    if not (fm.exists() and fp.exists()):
+        pytest.skip("packing.json / loading_plan.json 不存在")
+    vehicles = json.loads(fm.read_text(encoding="utf-8")).get("vehicles") or []
+    plans = json.loads(fp.read_text(encoding="utf-8")).get("plans") or []
+    fig_dir = FINAL / "figures"
+    for i, v in enumerate(vehicles, start=1):
+        plan = next((p for p in plans
+                     if p.get("vehicle_instance") == v.get("vehicle_instance")), None)
+        steps = len((plan or {}).get("loading_steps") or [])
+        placed = len(v.get("placed") or [])
+        expected = min(steps, 8) if (steps and placed) else 0
+        have = len(list(fig_dir.glob(f"step_V{i:02d}_*.png")))
+        assert have == expected, (
+            f"{v.get('vehicle_instance')}: steps={steps} placed={placed} "
+            f"figures={have} expected={expected}")

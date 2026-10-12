@@ -9,7 +9,7 @@
 
 * ``route_map.png``      —— 中心仓 + 门店散点；各车次路线用不同颜色连线并标注路线编号
 * ``packing_V{n}.png``   —— 第 n 辆车厢的 3D 装载图（``Axes3D`` + ``bar3d``，按门店着色，半透明箱体）
-* ``step_V{n}_{i}.png``  —— 第 n 辆车的第 i 张分步装载示意（每车最多 5 张，按 loading_steps 累进）
+* ``step_V{n}_{i}.png``  —— 第 n 辆车的第 i 张分步装载示意（每车最多 8 张，按 loading_steps 累进）
 
 约定:
 
@@ -56,7 +56,7 @@ _DEFAULT_CARGO_DIMS: dict[str, tuple[float, float, float]] = {
 #: 图件统一参数
 _FIG_DPI = 100
 _FIG_W = 10.0          # inch，宽度
-_MAX_STEP_SHOTS = 5    # 每车分步图最多张数（契约 3–5 张）
+_MAX_STEP_SHOTS = 8    # 每车分步图最多张数（T50h：5→8；自定约定 3–8 张）
 
 
 # --------------------------------------------------------------------- 工具
