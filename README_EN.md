@@ -8,6 +8,17 @@
 
 ---
 
+## Reviewer Quick Verification (3 steps, ~3 minutes)
+
+1. **Install dependencies** (Python 3.10+): `pip install -r requirements.txt`
+2. **Run the pipeline**: `python run.py --data data/ --out outputs/verify/` (completes in ~2 seconds)
+3. **View results**: open `outputs/verify/report.html` in a browser
+
+- This project runs **fully without any API key** (all core features and tests are key-independent);
+- To test LLM-enhanced features (natural-language order parsing, etc.), use **your own API key** — enter it directly in the interactive UI sidebar (kept in memory only, never written to disk) or configure via environment variables; see "6. How to Run".
+
+---
+
 ## 1. Team
 
 > **【To be filled before submission】** Team name / members & roles / contact (resume optional).
@@ -97,7 +108,21 @@ python experiments/run_experiments.py --repeat 3 --rounds 2
 pytest tests -q
 ```
 
-**View the demo (no run needed)**: open `outputs/t25-final/report.html` (optimized-plan report) and `outputs/t25-baseline/report.html` (baseline comparison report) in a browser — self-contained single pages, figures included in the repo, viewable offline.
+**Demo & visual preview** (no clone required — renders directly on GitHub):
+
+**① In-repo preview** — actual system output (seed42 optimized plan):
+
+![Delivery route map (central warehouse → 30 stores, colored by vehicle)](outputs/t25-final/figures/route_map.png)
+
+![3D loading view of a vehicle (V01, colored by store, with "unloaded N items" annotation)](outputs/t25-final/figures/packing_V01.png)
+
+![Step-by-step loading illustration (V01, step 1)](outputs/t25-final/figures/step_V01_1.png)
+
+> More figures: `outputs/t25-final/figures/` (32 images: route map + per-vehicle 3D loading views + step-by-step loading views).
+
+**② Full reports (open in browser after clone)**: `outputs/t25-final/report.html` (optimized-plan report) and `outputs/t25-baseline/report.html` (baseline comparison report) — self-contained single pages, figures included in the repo, viewable offline.
+
+**③ Interactive experience (optional)**: see "Interactive UI" below.
 
 **Interactive UI (optional)**:
 
@@ -107,6 +132,8 @@ streamlit run app.py
 ```
 
 Pick a dataset (seed42 / seed7) → click "Run" → view metric cards, comparison table, route maps, 3D loading views and step-by-step handling instructions. The UI non-invasively reuses the main pipeline modules (outputs go to `outputs/app-tmp/`).
+
+**LLM-enhanced features (optional, with your own API key)**: the sidebar "LLM Enhancement (Optional)" panel accepts your API key directly (kept in session memory only — never written to disk, never echoed back), enabling: **natural-language order parsing** (plain-language order → structured order) and guide-text polishing. **All features run normally without a key** (parsing falls back to the rule engine, guides use template text). Environment variables are also supported: `CITYLOAD_LLM_API_KEY` (or `DEEPSEEK_API_KEY` / `OPENAI_API_KEY` with auto-detection), `CITYLOAD_LLM_BASE_URL`, `CITYLOAD_LLM_MODEL`.
 
 ## 7. Experimental Results
 
