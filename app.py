@@ -28,6 +28,8 @@ import json
 import os
 import re
 import sys
+import urllib.error
+import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -119,13 +121,27 @@ STRINGS = {
         "step_caption": "{instance} · 分步示意 {shot}",
         "llm_title": "LLM 增强（可选）",
         "llm_key_notice": "API Key 仅保存在本次会话内存中，不写入磁盘、不回显。",
+        "llm_base_url": "接口地址（Base URL）",
+        "llm_base_url_ph": "https://api.deepseek.com（默认）",
         "llm_api_key": "API Key",
         "llm_key_placeholder": "sk-…（留空 = 不启用）",
-        "llm_advanced": "高级选项（Base URL / 模型）",
-        "llm_base_url": "Base URL",
-        "llm_base_url_ph": "https://api.deepseek.com（默认）",
-        "llm_model": "模型名",
+        "llm_model": "模型名称",
         "llm_model_ph": "deepseek-chat（默认）",
+        "llm_test_btn": "测试连接",
+        "llm_fetch_btn": "获取模型列表",
+        "llm_testing": "正在连接 {base} …",
+        "llm_conn_ok": "连接成功：{base} 可用，共 {n} 个模型。",
+        "llm_conn_fail": "连接失败：{reason}",
+        "llm_model_pick": "可用模型（选择后自动填入模型名称）",
+        "llm_examples_hint": "也可手动填写模型名，示例：deepseek-chat / gpt-4o",
+        "llm_reason_no_key": "请先填写 API Key",
+        "llm_reason_auth": "认证失败（Key 无效或无权限）",
+        "llm_reason_unsupported": "该服务不支持 /models 端点（HTTP 404）",
+        "llm_reason_network": "网络不可达或地址错误{detail}",
+        "llm_reason_timeout": "连接超时",
+        "llm_reason_format": "响应格式无法识别（非 OpenAI 兼容的 /models 响应）",
+        "llm_reason_http": "服务返回错误（HTTP {detail}）",
+        "llm_reason_unknown": "未知错误：{detail}",
         "llm_enabled_hint": "已启用 LLM 增强：调用前临时注入运行时环境，用后立即清理。",
         "llm_disabled_hint": "未启用 LLM：自然语言解析走离线规则引擎，指引走模板文本。",
         "llm_env_hint": "检测到环境变量 {var}，未填 Key 时将自动使用它。",
@@ -267,13 +283,27 @@ STRINGS = {
         "step_caption": "{instance} · step {shot}",
         "llm_title": "LLM Enhancement (optional)",
         "llm_key_notice": "Your API key is kept only in this session's memory — never written to disk, never echoed.",
+        "llm_base_url": "API Base URL",
+        "llm_base_url_ph": "https://api.deepseek.com (default)",
         "llm_api_key": "API Key",
         "llm_key_placeholder": "sk-… (leave empty = disabled)",
-        "llm_advanced": "Advanced (Base URL / model)",
-        "llm_base_url": "Base URL",
-        "llm_base_url_ph": "https://api.deepseek.com (default)",
-        "llm_model": "Model",
+        "llm_model": "Model name",
         "llm_model_ph": "deepseek-chat (default)",
+        "llm_test_btn": "Test Connection",
+        "llm_fetch_btn": "Fetch Models",
+        "llm_testing": "Connecting to {base} …",
+        "llm_conn_ok": "Connected — {n} model(s) available at {base}.",
+        "llm_conn_fail": "Connection failed: {reason}",
+        "llm_model_pick": "Available models (pick to fill the model name)",
+        "llm_examples_hint": "You can also type the model name manually, e.g. deepseek-chat / gpt-4o",
+        "llm_reason_no_key": "API key required",
+        "llm_reason_auth": "Authentication failed (invalid key or no permission)",
+        "llm_reason_unsupported": "The service does not support the /models endpoint (HTTP 404)",
+        "llm_reason_network": "Network unreachable or wrong address {detail}",
+        "llm_reason_timeout": "Connection timed out",
+        "llm_reason_format": "Unrecognized response format (not an OpenAI-compatible /models payload)",
+        "llm_reason_http": "Service returned an error (HTTP {detail})",
+        "llm_reason_unknown": "Unknown error: {detail}",
         "llm_enabled_hint": "LLM enhancement enabled: the key is injected at run time and cleaned up right after.",
         "llm_disabled_hint": "LLM disabled: parsing uses the offline rule engine; guides use template text.",
         "llm_env_hint": "Environment variable {var} detected; it is used automatically when no key is entered.",
@@ -508,12 +538,140 @@ def _ambient_llm_var() -> str:
     return ""
 
 
+def _effective_llm_config() -> tuple[str, str, str]:
+    """当前生效的 LLM 配置（会话输入优先，缺省回落环境变量与内置默认）。
+
+    返回 (base_url, api_key, model)；只读取不展示，调用方不得将 key 写入界面/日志。
+    """
+    base = str(st.session_state.get("llm_base_url") or "").strip()
+    key = str(st.session_state.get("llm_api_key") or "").strip()
+    model = str(st.session_state.get("llm_model") or "").strip()
+    if not key:
+        for name in ("CITYLOAD_LLM_API_KEY", "DEEPSEEK_API_KEY", "OPENAI_API_KEY"):
+            val = os.environ.get(name)
+            if val:
+                key = val
+                break
+    env_base = (os.environ.get("CITYLOAD_LLM_BASE_URL")
+                or os.environ.get("DEEPSEEK_BASE_URL") or "")
+    return (base or env_base or "https://api.deepseek.com"), key, (model or "deepseek-chat")
+
+
+def _fetch_models(base_url: str, api_key: str, timeout: float = 8.0) -> dict:
+    """GET ``{base_url}/models`` 探测服务连通性并拉取模型列表（OpenAI 兼容格式）。
+
+    返回 ``{"ok": True, "models": [id, ...]}`` 或
+    ``{"ok": False, "reason": 分类码, "detail": 补充信息}``。
+
+    分类码：no_key / auth / unsupported / network / timeout / format / http / unknown。
+    安全红线（T50h④）：错误信息只含分类与网络层描述，绝不含 Key/凭据；
+    本函数不打印、不落盘任何配置。
+    """
+    base = str(base_url or "").strip().rstrip("/") or "https://api.deepseek.com"
+    if not str(api_key or "").strip():
+        return {"ok": False, "reason": "no_key", "detail": ""}
+    req = urllib.request.Request(
+        base + "/models",
+        headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+    except urllib.error.HTTPError as exc:  # HTTPError ⊂ URLError ⊂ OSError，最先捕获
+        if exc.code in (401, 403):
+            return {"ok": False, "reason": "auth", "detail": ""}
+        if exc.code == 404:
+            return {"ok": False, "reason": "unsupported", "detail": ""}
+        return {"ok": False, "reason": "http", "detail": str(exc.code)}
+    except TimeoutError:
+        return {"ok": False, "reason": "timeout", "detail": ""}
+    except urllib.error.URLError as exc:
+        reason = str(getattr(exc, "reason", exc))
+        if "timed out" in reason.lower():
+            return {"ok": False, "reason": "timeout", "detail": ""}
+        return {"ok": False, "reason": "network", "detail": f"（{reason[:100]}）"}
+    except OSError as exc:  # 连接级异常兜底（TimeoutError 已在上方单独处理）
+        return {"ok": False, "reason": "network", "detail": f"（{type(exc).__name__}）"}
+    except ValueError:  # JSON 解析失败（JSONDecodeError ⊂ ValueError）
+        return {"ok": False, "reason": "format", "detail": ""}
+    except Exception as exc:  # noqa: BLE001 —— 探测失败绝不导致界面崩溃
+        return {"ok": False, "reason": "unknown", "detail": f"{type(exc).__name__}"}
+
+    models = [str(m.get("id")) for m in (payload.get("data") or [])
+              if isinstance(m, dict) and m.get("id")]
+    if not models:
+        return {"ok": False, "reason": "format", "detail": ""}
+    return {"ok": True, "models": models}
+
+
+def _llm_reason_text(reason: str, detail: str = "") -> str:
+    """把探测失败分类码转为当前语言的提示文本（detail 仅补充上下文）。"""
+    lang = st.session_state.get("lang", "zh")
+    table = STRINGS.get(lang, STRINGS["zh"])
+    key = f"llm_reason_{reason}"
+    text = table.get(key) or STRINGS["zh"].get(key) or str(reason)
+    if "{detail}" in text:
+        return text.format(detail=detail).strip()
+    return text
+
+
+def _llm_invalidate_probe() -> None:
+    """输入框变化时使旧的探测结果失效（模型列表与连接状态不再对应当前配置）。"""
+    st.session_state.pop("llm_conn", None)
+    st.session_state.pop("llm_models", None)
+    st.session_state.pop("llm_model_pick", None)
+
+
 def _llm_panel() -> None:
-    """侧边栏 LLM 增强面板：Key（password）+ 高级选项（Base URL / 模型）。"""
+    """侧边栏 LLM 增强面板（T50h④：单层组织 + 测试连接 + 获取模型列表）。
+
+    安全红线（T50c/T50h）：Key 仅存 session_state 内存；不落盘、不写日志、不回显；
+    探测请求仅在点击按钮时发生，失败一律优雅降级为手填。
+    """
     with st.sidebar.expander(t("llm_title"), expanded=False):
         st.caption(t("llm_key_notice"))
+        st.text_input(t("llm_base_url"), key="llm_base_url",
+                      placeholder=t("llm_base_url_ph"), on_change=_llm_invalidate_probe)
         st.text_input(t("llm_api_key"), type="password", key="llm_api_key",
-                      placeholder=t("llm_key_placeholder"))
+                      placeholder=t("llm_key_placeholder"), on_change=_llm_invalidate_probe)
+        st.text_input(t("llm_model"), key="llm_model",
+                      placeholder=t("llm_model_ph"), on_change=_llm_invalidate_probe)
+
+        col_test, col_fetch = st.columns(2)
+        do_test = col_test.button(t("llm_test_btn"), key="llm_test_btn", width="stretch")
+        do_fetch = col_fetch.button(t("llm_fetch_btn"), key="llm_fetch_btn", width="stretch")
+
+        if do_test or do_fetch:
+            base, key, _model = _effective_llm_config()
+            with st.spinner(t("llm_testing", base=base)):
+                result = _fetch_models(base, key)
+            if result["ok"]:
+                st.session_state["llm_models"] = result["models"]
+                st.session_state["llm_conn"] = {"ok": True, "base": base,
+                                                "n": len(result["models"])}
+            else:
+                st.session_state["llm_conn"] = {
+                    "ok": False, "reason": result["reason"],
+                    "detail": result.get("detail") or "",
+                }
+                st.session_state.pop("llm_models", None)  # 探测失败：列表失效
+
+        conn = st.session_state.get("llm_conn")
+        if conn:
+            if conn["ok"]:
+                st.success(t("llm_conn_ok", base=conn["base"], n=conn["n"]))
+            else:
+                st.warning(t("llm_conn_fail",
+                             reason=_llm_reason_text(conn["reason"], conn["detail"])))
+
+        models = st.session_state.get("llm_models") or []
+        if models:
+            st.selectbox(t("llm_model_pick"), options=models, key="llm_model_pick",
+                         on_change=_llm_apply_model_choice)
+        elif conn and not conn["ok"]:
+            st.caption(t("llm_examples_hint"))  # 拉取失败 → 降级为手填（附示例）
+
         if _has_session_key():
             st.success(t("llm_enabled_hint"))
         else:
@@ -521,9 +679,13 @@ def _llm_panel() -> None:
             ambient = _ambient_llm_var()
             if ambient:
                 st.caption(t("llm_env_hint", var=ambient))
-    with st.sidebar.expander(t("llm_advanced"), expanded=False):
-        st.text_input(t("llm_base_url"), key="llm_base_url", placeholder=t("llm_base_url_ph"))
-        st.text_input(t("llm_model"), key="llm_model", placeholder=t("llm_model_ph"))
+
+
+def _llm_apply_model_choice() -> None:
+    """下拉选中模型后回填到模型名称输入框（回调在下一次脚本执行前运行，写入安全）。"""
+    picked = st.session_state.get("llm_model_pick")
+    if picked:
+        st.session_state["llm_model"] = picked
 
 
 def _kpi_row(m: dict) -> None:

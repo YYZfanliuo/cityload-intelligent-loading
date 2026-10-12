@@ -8,7 +8,8 @@
 覆盖：初始渲染（默认中文）→ 组件齐备 → 点击运行 → 指标卡/对比表/图件渲染；
 T50b 双语：侧边栏切换 English → 骨架文案为英文 → 点击运行仍正常；
 T50c LLM 面板（无 Key 红线 / Key 注入与清理）；T50d/T50e/T50f NL 串联流程；
-T50g NL 结果区补图（3D 装载图 + 分步图，目标车辆优先）。
+T50g NL 结果区补图（3D 装载图 + 分步图，目标车辆优先）；
+T50h 多行上限 50 / 分步图 8 张 / 按车分组展示 / ④LLM 面板（测试连接 + 获取模型列表）。
 注意：本测试会真实执行完整管线（各用例数十秒量级）。
 """
 
@@ -114,7 +115,7 @@ def test_app_llm_key_injection_cleanup_and_fallback(monkeypatch):
     at.run()
     inputs = {x.label: x for x in at.get("text_input")}
     inputs["API Key"].set_value("sk-dummy-test-000")
-    inputs["Base URL"].set_value("http://127.0.0.1:9")
+    inputs["接口地址（Base URL）"].set_value("http://127.0.0.1:9")
     at.run()
     assert any("已启用 LLM" in s.value for s in at.success)
 
@@ -360,3 +361,108 @@ def test_app_t50h_vehicle_grouping(monkeypatch):
     captions = [c for img in at.image for c in (img.captions or [])]
     assert [c for c in captions if "车厢 3D 装载图" in c], "组内应含 3D 总图"
     assert [c for c in captions if "分步示意" in c], "组内应含分步图"
+
+
+# ---------------------------------------------------------------- T50h ④ LLM 面板
+
+
+def _start_models_mock(mode: dict | None = None):
+    """启动本地 mock /models 服务（校验 Bearer 头），返回 (base_url, stop_fn)。"""
+    import json as _json
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    state = mode if mode is not None else {"m": "ok"}
+
+    class _Handler(BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            if not self.headers.get("Authorization", "").startswith("Bearer "):
+                self.send_response(401)
+                self.end_headers()
+                return
+            if state["m"] == "404":
+                self.send_response(404)
+                self.end_headers()
+                return
+            body = _json.dumps({"data": [{"id": "deepseek-chat"},
+                                         {"id": "deepseek-reasoner"}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):  # 静音
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), _Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+    def _stop():
+        srv.shutdown()
+        srv.server_close()
+
+    return f"http://127.0.0.1:{srv.server_port}", _stop
+
+
+def test_app_t50h4_fetch_models_branches(monkeypatch):
+    """T50h④：_fetch_models 单元分支——无 Key / 成功（含 Bearer 校验）/ 404 不支持。"""
+    _clear_llm_env(monkeypatch)
+    import app
+
+    assert app._fetch_models("http://127.0.0.1:9", "")["reason"] == "no_key"
+    mode = {"m": "ok"}
+    base, stop = _start_models_mock(mode)
+    try:
+        ok = app._fetch_models(base, "sk-mock-unit")
+        assert ok["ok"] and ok["models"] == ["deepseek-chat", "deepseek-reasoner"]
+        mode["m"] = "404"
+        r404 = app._fetch_models(base, "sk-mock-unit")
+        assert r404["reason"] == "unsupported"
+    finally:
+        stop()
+
+
+def test_app_t50h4_llm_panel_test_and_fetch(monkeypatch):
+    """T50h④：面板单层三字段两按钮 → 无 Key 提示 → mock 连接成功 + 模型下拉 + 回填。"""
+    _clear_llm_env(monkeypatch)
+    from streamlit.testing.v1 import AppTest
+
+    base, stop = _start_models_mock()
+    try:
+        at = AppTest.from_file(APP, default_timeout=120)
+        at.run()
+        assert not at.exception, at.exception
+
+        labels = [x.label for x in at.get("text_input")]
+        for expect in ("接口地址（Base URL）", "API Key", "模型名称"):
+            assert expect in labels, f"缺少字段 {expect}"
+        keys = {b.key for b in at.button}
+        assert {"llm_test_btn", "llm_fetch_btn"} <= keys, "缺少测试连接/获取模型列表按钮"
+        assert not any("高级选项" in e.label for e in at.get("expander")), "已合并为单层组织"
+
+        # 无 Key 点击「测试连接」→ 明确提示（不崩溃）
+        [b for b in at.button if b.key == "llm_test_btn"][0].click()
+        at.run()
+        assert any("请先填写 API Key" in w.value for w in at.warning), \
+            [w.value for w in at.warning]
+
+        # 填入 mock 配置 → 获取模型列表
+        inputs = {x.label: x for x in at.get("text_input")}
+        inputs["接口地址（Base URL）"].set_value(base)
+        inputs["API Key"].set_value("sk-mock-ui")
+        at.run()
+        [b for b in at.button if b.key == "llm_fetch_btn"][0].click()
+        at.run()
+        assert any("连接成功" in s.value and "2 个模型" in s.value for s in at.success), \
+            [s.value for s in at.success]
+        sel = [s for s in at.selectbox if s.label.startswith("可用模型")]
+        assert sel and list(sel[0].options) == ["deepseek-chat", "deepseek-reasoner"]
+
+        # 选择模型 → 自动回填到「模型名称」输入框
+        sel[0].select("deepseek-reasoner")
+        at.run()
+        assert any(x.label == "模型名称" and x.value == "deepseek-reasoner"
+                   for x in at.get("text_input")), "选择后应回填模型名称"
+    finally:
+        stop()
