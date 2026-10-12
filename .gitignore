@@ -6,6 +6,7 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+.pytest-tmp-*/
 
 # ---- 运行产物（契约 v1.4）----
 # 输出统一放 outputs/：report.html、JSON、figures/*.png 图件均须入库供评审查看，
