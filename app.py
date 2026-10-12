@@ -391,13 +391,14 @@ def t(key: str, **kw) -> str:
 # ---------------------------------------------------------------- 核心逻辑（无 Streamlit 依赖）
 
 
-def execute(seed_key: str, data_dir: str, comparison: bool) -> dict:
-    """跑完整管线并返回展示数据（与语言无关）；产物写入 outputs/app-tmp/{seed_key}/。"""
-    out_dir = APP_TMP / seed_key / ("comparison" if comparison else "single")
-    result = pipeline.run_pipeline(data_dir, out_dir, baseline=False, comparison=comparison)
+def _group_figures(figures: list[Path], packing: dict) -> dict:
+    """把管线图件路径按类型分组（T50g 抽取，主流程与 NL 流程共用）。
 
-    figures = [Path(p) for p in result["figures"]]
-    instances = [v.get("vehicle_instance", "") for v in result["packing"].get("vehicles", [])]
+    返回 ``{"route_map": Path|None, "packing_figs": [(Path, instance)],
+    "step_figs": [(Path, instance, shot)]}``；
+    文件名中的 ``V{n}`` 按 packing["vehicles"] 出现序号映射为真实车辆编号（如 R04-1）。
+    """
+    instances = [v.get("vehicle_instance", "") for v in (packing or {}).get("vehicles", [])]
 
     def _instance(path: Path) -> str:
         m = re.fullmatch(r"(?:packing|step)_V(\d+)(?:_\d+)?\.png", path.name)
@@ -409,13 +410,23 @@ def execute(seed_key: str, data_dir: str, comparison: bool) -> dict:
     packing_figs = [(p, _instance(p)) for p in figures if p.name.startswith("packing_")]
     step_figs = [(p, _instance(p), int(re.search(r"_(\d+)\.png$", p.name).group(1)))
                  for p in figures if p.name.startswith("step_")]
+    return {"route_map": route_map, "packing_figs": packing_figs, "step_figs": step_figs}
+
+
+def execute(seed_key: str, data_dir: str, comparison: bool) -> dict:
+    """跑完整管线并返回展示数据（与语言无关）；产物写入 outputs/app-tmp/{seed_key}/。"""
+    out_dir = APP_TMP / seed_key / ("comparison" if comparison else "single")
+    result = pipeline.run_pipeline(data_dir, out_dir, baseline=False, comparison=comparison)
+
+    figures = [Path(p) for p in result["figures"]]
+    groups = _group_figures(figures, result["packing"])
     return {
         "seed": seed_key,
         "metrics": result["metrics"].get("metrics", {}),
         "comparison": result["metrics"].get("comparison"),
-        "route_map": str(route_map) if route_map else None,
-        "packing_figs": [(inst, str(p)) for p, inst in packing_figs],
-        "step_figs": [(inst, shot, str(p)) for p, inst, shot in step_figs],
+        "route_map": str(groups["route_map"]) if groups["route_map"] else None,
+        "packing_figs": [(inst, str(p)) for p, inst in groups["packing_figs"]],
+        "step_figs": [(inst, shot, str(p)) for p, inst, shot in groups["step_figs"]],
         "guides": result["guide_text"].get("guides", []),
         "out_dir": str(out_dir),
         "figure_count": len(figures),
@@ -560,6 +571,29 @@ def _comparison_rows(comp: dict) -> list[dict]:
     return rows
 
 
+def _render_packing_gallery(packing_figs: list) -> None:
+    """车厢 3D 装载图区（两列网格）。主界面与 NL 流程（插单/多单）共用。"""
+    if not packing_figs:
+        return
+    st.subheader(t("packing_title"))
+    cols = st.columns(2)
+    for i, (instance, path) in enumerate(packing_figs):
+        with cols[i % 2]:
+            st.image(path, caption=t("packing_caption", instance=instance), width="stretch")
+
+
+def _render_step_gallery(step_figs: list) -> None:
+    """分步装载示意图区（三列网格，置于折叠面板内）。主界面与 NL 流程共用。"""
+    if not step_figs:
+        return
+    with st.expander(t("step_title", n=len(step_figs))):
+        cols = st.columns(3)
+        for i, (instance, shot, path) in enumerate(step_figs):
+            with cols[i % 3]:
+                st.image(path, caption=t("step_caption", instance=instance, shot=shot),
+                         width="stretch")
+
+
 def _render_result(r: dict) -> None:
     m = r["metrics"]
     st.caption(t("result_meta", seed=r["seed"], n=r["figure_count"], out=r["out_dir"]))
@@ -579,24 +613,13 @@ def _render_result(r: dict) -> None:
         st.subheader(t("route_map_title"))
         st.image(r["route_map"], width="stretch")
 
-    if r["packing_figs"]:
-        st.subheader(t("packing_title"))
-        cols = st.columns(2)
-        for i, (instance, path) in enumerate(r["packing_figs"]):
-            with cols[i % 2]:
-                st.image(path, caption=t("packing_caption", instance=instance), width="stretch")
+    _render_packing_gallery(r["packing_figs"])
 
     if r["guides"]:
         with st.expander(t("guide_title", n=len(r["guides"]))):
             _render_guides(r["guides"])
 
-    if r["step_figs"]:
-        with st.expander(t("step_title", n=len(r["step_figs"]))):
-            cols = st.columns(3)
-            for i, (instance, shot, path) in enumerate(r["step_figs"]):
-                with cols[i % 3]:
-                    st.image(path, caption=t("step_caption", instance=instance, shot=shot),
-                             width="stretch")
+    _render_step_gallery(r["step_figs"])
 
 
 # ---------------------------------------------------------------- 指引润色 / 自然语言下单
@@ -986,7 +1009,7 @@ def _merge_and_run(parsed: dict, seed_key: str) -> dict:
             break
 
     figures = [Path(p) for p in result["figures"]]
-    route_map = next((p for p in figures if p.name == "route_map.png"), None)
+    groups = _group_figures(figures, result["packing"])
     return {
         "error": None,
         "seed": seed_key,
@@ -994,7 +1017,9 @@ def _merge_and_run(parsed: dict, seed_key: str) -> dict:
         "new_order_id": new_order_id,
         "route_info": route_info,
         "metrics": result["metrics"].get("metrics") or {},
-        "route_map": str(route_map) if route_map else None,
+        "route_map": str(groups["route_map"]) if groups["route_map"] else None,
+        "packing_figs": [(inst, str(p)) for p, inst in groups["packing_figs"]],
+        "step_figs": [(inst, shot, str(p)) for p, inst, shot in groups["step_figs"]],
         "out_dir": str(out_dir),
     }
 
@@ -1046,6 +1071,16 @@ def _render_merged_result(m: dict) -> None:
     if m.get("route_map"):
         st.markdown(f"**{t('merge_route_title')}**")
         st.image(m["route_map"], width="stretch")
+
+    # T50g：补展示车厢 3D 装载图 + 分步装载图；新订单所在车辆的图优先排列
+    packing_figs = list(m.get("packing_figs") or [])
+    step_figs = list(m.get("step_figs") or [])
+    rid = str((info or {}).get("route_id") or "")
+    if rid:
+        packing_figs.sort(key=lambda x: 0 if str(x[0]).startswith(rid) else 1)
+        step_figs.sort(key=lambda x: 0 if str(x[0]).startswith(rid) else 1)
+    _render_packing_gallery(packing_figs)
+    _render_step_gallery(step_figs)
 
 
 # ---------------------------------------------------------------- 数据档案 UI（T50e）
@@ -1300,7 +1335,7 @@ def _build_independent_scene(text: str, seed_key: str) -> dict:
                     "arrive": (stop_map.get(sid) or {}).get("arrive"),
                 }
     figures = [Path(p) for p in result["figures"]]
-    route_map = next((p for p in figures if p.name == "route_map.png"), None)
+    groups = _group_figures(figures, result["packing"])
     return {
         "error": None,
         "seed": seed_key,
@@ -1308,7 +1343,9 @@ def _build_independent_scene(text: str, seed_key: str) -> dict:
         "orders": orders_list,
         "route_of": route_of,
         "metrics": result["metrics"].get("metrics") or {},
-        "route_map": str(route_map) if route_map else None,
+        "route_map": str(groups["route_map"]) if groups["route_map"] else None,
+        "packing_figs": [(inst, str(p)) for p, inst in groups["packing_figs"]],
+        "step_figs": [(inst, shot, str(p)) for p, inst, shot in groups["step_figs"]],
         "out_dir": str(out_dir),
     }
 
@@ -1385,6 +1422,10 @@ def _render_multi_result(mr: dict) -> None:
     if mr.get("route_map"):
         st.markdown(f"**{t('merge_route_title')}**")
         st.image(mr["route_map"], width="stretch")
+
+    # T50g：补展示车厢 3D 装载图 + 分步装载图（新样式）
+    _render_packing_gallery(list(mr.get("packing_figs") or []))
+    _render_step_gallery(list(mr.get("step_figs") or []))
 
 
 # ---------------------------------------------------------------- 主界面

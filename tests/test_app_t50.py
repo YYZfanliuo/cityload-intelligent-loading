@@ -6,8 +6,10 @@
     CITYLOAD_APP_TEST=1 pytest tests/test_app_t50.py -v
 
 覆盖：初始渲染（默认中文）→ 组件齐备 → 点击运行 → 指标卡/对比表/图件渲染；
-以及 T50b 双语：侧边栏切换 English → 骨架文案为英文 → 点击运行仍正常。
-注意：本测试会真实执行完整管线（中文/英文各一次完整点击，约 40～60 秒）。
+T50b 双语：侧边栏切换 English → 骨架文案为英文 → 点击运行仍正常；
+T50c LLM 面板（无 Key 红线 / Key 注入与清理）；T50d/T50e/T50f NL 串联流程；
+T50g NL 结果区补图（3D 装载图 + 分步图，目标车辆优先）。
+注意：本测试会真实执行完整管线（各用例数十秒量级）。
 """
 
 import os
@@ -277,3 +279,50 @@ def test_app_t50f_merge_note_and_compare(monkeypatch):
     assert not at.exception and not at.error
     infos = [i.value for i in at.info]
     assert any("方案对比" in v and "原方案" in v for v in infos), infos
+
+
+def test_app_t50g_merge_shows_cargo_figures(monkeypatch):
+    """T50g：插单结果区补展示 3D 装载图 + 分步图，且目标车辆图优先排列。"""
+    import re
+
+    _clear_llm_env(monkeypatch)
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    [b for b in at.button if b.key == "nl_example_0"][0].click()
+    at.run()
+    [b for b in at.button if b.key == "merge_run"][0].click()
+    at.run()
+    assert not at.exception and not at.error
+
+    captions = [c for img in at.image for c in (img.captions or [])]
+    pack_caps = [c for c in captions if "车厢 3D 装载图" in c]
+    step_caps = [c for c in captions if "分步示意" in c]
+    assert pack_caps, "插单结果区应展示车厢 3D 装载图"
+    assert step_caps, "插单结果区应展示分步装载图"
+
+    # 目标车辆（success 消息中的车次号）的装载图应排在最前
+    success_text = " ".join(s.value for s in at.success)
+    route_ids = re.findall(r"R\d{2}", success_text)
+    assert route_ids, f"success 消息应含车次号：{success_text[:120]}"
+    assert pack_caps[0].startswith(route_ids[0]), \
+        f"目标车辆 {route_ids[0]} 的装载图应排最前：{pack_caps[:3]}"
+
+
+def test_app_t50g_multi_scene_shows_cargo_figures(monkeypatch):
+    """T50g：多单独立场景结果区补展示 3D 装载图 + 分步图。"""
+    _clear_llm_env(monkeypatch)
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    [b for b in at.button if b.key == "multi_fill"][0].click()
+    at.run()
+    [b for b in at.button if b.key == "multi_build"][0].click()
+    at.run()
+    assert not at.exception and not at.error
+
+    captions = [c for img in at.image for c in (img.captions or [])]
+    assert [c for c in captions if "车厢 3D 装载图" in c], "多单场景应展示车厢 3D 装载图"
+    assert [c for c in captions if "分步示意" in c], "多单场景应展示分步装载图"
