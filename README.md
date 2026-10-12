@@ -6,6 +6,17 @@
 
 ---
 
+## 评审快速验证（3 步，约 3 分钟）
+
+1. **安装依赖**（Python 3.10+）：`pip install -r requirements.txt`
+2. **运行主流程**：`python run.py --data data/ --out outputs/verify/`（约 2 秒完成）
+3. **查看结果**：浏览器打开 `outputs/verify/report.html`
+
+- 本项目**不需要任何密钥即可完整运行**（全部核心功能与测试均不依赖密钥）；
+- 如需测试 LLM 增强功能（自然语言订单解析等），请使用**您自己的 API Key**——交互界面侧边栏可直接填入（仅存内存、不落盘），或通过环境变量配置，详见「六、运行方式」。
+
+---
+
 ## 一、团队信息
 
 > **【提交前填写】** 团队名称 / 成员姓名与分工 / 联系方式（可附个人简历）。
@@ -97,7 +108,21 @@ python experiments/run_experiments.py --repeat 3 --rounds 2
 pytest tests -q
 ```
 
-**查看 Demo（无需运行）**：直接浏览器打开 `outputs/t25-final/report.html`（优化方案完整报告）与 `outputs/t25-baseline/report.html`（基线对比报告）——均为自包含单页（图件随仓库提供，离线可看）。
+**Demo 与效果预览**（无需 clone，GitHub 网页直接可见）：
+
+**① 仓库内预览**——以下为系统实际产出（seed42 优化方案）：
+
+![配送路线图（中心仓 → 30 家门店，按车辆着色）](outputs/t25-final/figures/route_map.png)
+
+![车厢 3D 装载图（V01 车次，按门店着色，含"未装载 N 件"标注）](outputs/t25-final/figures/packing_V01.png)
+
+![分步装卸示意（V01 车次第 1 步）](outputs/t25-final/figures/step_V01_1.png)
+
+> 更多图件见 `outputs/t25-final/figures/`（共 32 张：路线图 + 各车厢 3D 装载图 + 分步装载图）。
+
+**② 完整报告（clone 后浏览器打开）**：`outputs/t25-final/report.html`（优化方案完整报告）与 `outputs/t25-baseline/report.html`（基线对比报告）——自包含单页，图件随仓库提供，离线可看。
+
+**③ 交互式体验（可选）**：见下方"交互式演示界面"。
 
 **交互式演示界面（可选）**：
 
@@ -107,6 +132,8 @@ streamlit run app.py
 ```
 
 浏览器自动打开本地页面：下拉选择数据集（seed42 / seed7）→ 点击「运行智能配载」→ 页面直接展示指标卡、对比表、路线图与各车厢 3D 装载图、分步装卸指引。界面零侵入复用主管线模块（产物写入 `outputs/app-tmp/`，不影响主产物）。
+
+**LLM 增强功能（可选，使用您自己的 API Key）**：侧边栏「LLM 增强（可选）」面板可直接填入您的 API Key（仅保存在页面内存中，不写入磁盘、不回显），用于体验：**自然语言订单解析**（"说人话"下单 → 结构化订单）、装卸指引文案润色。**不填 Key 时全部功能正常运行**（解析自动降级为规则引擎、指引使用模板文案）；也可通过环境变量配置：`CITYLOAD_LLM_API_KEY`（或 `DEEPSEEK_API_KEY` / `OPENAI_API_KEY`，自动适配对应服务）、`CITYLOAD_LLM_BASE_URL`、`CITYLOAD_LLM_MODEL`。
 
 ## 七、实验结果
 
