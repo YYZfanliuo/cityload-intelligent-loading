@@ -75,3 +75,50 @@ def test_app_english_mode():
     assert len(at.image) >= 7
     assert any("Baseline" in s.value or "vs" in s.value for s in at.subheader)
     assert any("Route" in s.value for s in at.subheader)
+
+
+def _clear_llm_env(monkeypatch):
+    for var in ("CITYLOAD_LLM_API_KEY", "CITYLOAD_LLM_BASE_URL", "CITYLOAD_LLM_MODEL",
+                "DEEPSEEK_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+
+
+def test_app_llm_panel_no_key_flow(monkeypatch):
+    """T50c 红线：无 Key 时全流程正常——面板可见（Key 为 password 输入框）、
+    自然语言解析走规则引擎、界面不报错。"""
+    _clear_llm_env(monkeypatch)
+    at = _run_flow()
+
+    inputs = list(at.get("text_input"))
+    key_inputs = [x for x in inputs if x.label == "API Key"]
+    assert key_inputs, "侧边栏缺少 API Key 输入框"
+    assert key_inputs[0].proto.type == 1, "API Key 输入框应为 password 打码类型"
+    assert any("未启用 LLM" in i.value for i in at.info), "无 Key 时应提示未启用"
+
+    example_btn = [b for b in at.button if b.key == "nl_example_0"][0]
+    example_btn.click()
+    at.run()
+    assert not at.exception and not at.error
+    assert any("解析来源：规则引擎" in i.value for i in at.info), "无 Key 应走规则引擎来源"
+    assert len(at.dataframe) >= 2, "应展示结构化结果（概览 + items）"
+
+
+def test_app_llm_key_injection_cleanup_and_fallback(monkeypatch):
+    """T50c：填 Key（指向不可达地址）→ 优雅降级到规则引擎；运行时注入的环境变量已清理。"""
+    _clear_llm_env(monkeypatch)
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(APP, default_timeout=120)
+    at.run()
+    inputs = {x.label: x for x in at.get("text_input")}
+    inputs["API Key"].set_value("sk-dummy-test-000")
+    inputs["Base URL"].set_value("http://127.0.0.1:9")
+    at.run()
+    assert any("已启用 LLM" in s.value for s in at.success)
+
+    [b for b in at.button if b.key == "nl_example_0"][0].click()
+    at.run()
+    assert not at.exception and not at.error
+    assert any("已自动降级" in i.value or "解析来源：规则引擎" in i.value for i in at.info)
+    for var in ("CITYLOAD_LLM_API_KEY", "CITYLOAD_LLM_BASE_URL", "CITYLOAD_LLM_MODEL"):
+        assert not os.environ.get(var), f"注入的环境变量 {var} 未被清理"
