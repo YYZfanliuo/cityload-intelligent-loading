@@ -1,7 +1,7 @@
 {
   "status": "partial",
-  "solve_time_sec": 0.70957,
-  "peak_memory_mb": 80.219,
+  "solve_time_sec": 0.697778,
+  "peak_memory_mb": 80.23,
   "solver_backend": "baseline_greedy",
   "routes": [
     {

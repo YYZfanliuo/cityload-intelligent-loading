@@ -1,7 +1,7 @@
 {
   "status": "ok",
-  "solve_time_sec": 3.616959,
-  "peak_memory_mb": 85.039,
+  "solve_time_sec": 2.35748,
+  "peak_memory_mb": 84.406,
   "peak_memory_scope": "process_lifetime_peak_working_set",
   "solver_backend": "ortools",
   "fallback_reason": null,
