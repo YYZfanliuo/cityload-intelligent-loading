@@ -9,7 +9,7 @@
 
 * ``route_map.png``      —— 中心仓 + 门店散点；各车次路线用不同颜色连线并标注路线编号
 * ``packing_V{n}.png``   —— 第 n 辆车厢的 3D 装载图（``Axes3D`` + ``bar3d``，按门店着色，半透明箱体）
-* ``step_V{n}_{i}.png``  —— 第 n 辆车的第 i 张分步装载示意（每车最多 5 张，按 loading_steps 累进）
+* ``step_V{n}_{i}.png``  —— 第 n 辆车的第 i 张分步装载示意（每车最多 8 张，按 loading_steps 累进）
 
 约定:
 
@@ -33,7 +33,6 @@ matplotlib.use("Agg")  # 无界面环境（CLI/CI）渲染后端
 import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 # 中文显示（Windows 常见字体 + 跨平台兜底）
 plt.rcParams["font.sans-serif"] = [
@@ -57,7 +56,7 @@ _DEFAULT_CARGO_DIMS: dict[str, tuple[float, float, float]] = {
 #: 图件统一参数
 _FIG_DPI = 100
 _FIG_W = 10.0          # inch，宽度
-_MAX_STEP_SHOTS = 5    # 每车分步图最多张数（契约 3–5 张）
+_MAX_STEP_SHOTS = 8    # 每车分步图最多张数（T50h：5→8；自定约定 3–8 张）
 
 
 # --------------------------------------------------------------------- 工具
@@ -91,15 +90,23 @@ def _pos_size(placed: dict) -> tuple[float, float, float, float, float, float]:
 
 
 def _palette_colors() -> list:
-    """tab20/tab20b/tab20c 三轮叠加（60 色），保证 30 门店不重色。"""
+    """明亮门店色板（golden-angle 色相均分 + 双档明度交替）。
+
+    设计要点（T50g 修复，替代旧 tab20 三轮叠加方案——后者含 #7f7f7f/#c7c7c7
+    等灰色，且 pastel 浅色在 3D 箱体叠加下显得浑浊）：
+
+    ① 色相按黄金角 137.508° 递进——任意前缀子集（如 S01..S15）的色相
+       都均匀铺开，不会扎堆，单图内多门店互相可辨；
+    ② 明度两档（0.60/0.48）交替，进一步拉开相邻色差；
+    ③ 全色板无灰、无近黑，小尺寸箱体在图上仍清晰可辨。
+    """
+    import colorsys
+
     colors: list = []
-    for name in ("tab20", "tab20b", "tab20c"):
-        cmap = matplotlib.colormaps[name]
-        listed = getattr(cmap, "colors", None)
-        if listed:
-            colors.extend(listed)
-        else:  # 理论上 tab* 均为 ListedColormap，此处仅兜底
-            colors.extend(cmap(i / 19.0) for i in range(20))
+    for i in range(60):  # 30 门店有余量
+        hue = (i * 137.508 % 360.0) / 360.0
+        light = 0.60 if i % 2 == 0 else 0.48
+        colors.append(colorsys.hls_to_rgb(hue, light, 0.62))
     return colors
 
 
@@ -240,12 +247,24 @@ def _setup_3d_axes(ax, L: float, W: float, H: float) -> None:
 
 
 def _draw_cargo_outline(ax, L: float, W: float, H: float) -> None:
-    """车厢线框（12 条边）+ 半透明底面。"""
-    floor = Poly3DCollection(
-        [[(0, 0, -0.5), (L, 0, -0.5), (L, W, -0.5), (0, W, -0.5)]],
-        facecolors="#e2e8f0", edgecolors="none", alpha=0.9,
-    )
-    ax.add_collection3d(floor)
+    """车厢线框（12 条边）+ 底面细网格（T50g 修复）。
+
+    旧版在 z=-0.5 处铺了一块半透明填充面表达“地板”，但 matplotlib 3D 的
+    深度排序会把该整面错误地渲染到低处货物之前，观感像水面/玻璃遮挡货物。
+    现改用**底面细网格线**表达空间：线宽 0.6 的浅灰网格即使参与错误排序，
+    也几乎不遮挡箱体，同时保留车厢长宽刻度感。
+    """
+    # 底面参考网格：50cm 步长的浅灰细线（沿车长 / 沿车宽两个方向）
+    grid_color, step = "#cbd5e1", 50.0
+    x = step
+    while x < L - 1e-6:
+        ax.plot([x, x], [0.0, W], [0.0, 0.0], color=grid_color, lw=0.6, alpha=0.75)
+        x += step
+    y = step
+    while y < W - 1e-6:
+        ax.plot([0.0, L], [y, y], [0.0, 0.0], color=grid_color, lw=0.6, alpha=0.75)
+        y += step
+
     corners = [
         (0, 0, 0), (L, 0, 0), (L, W, 0), (0, W, 0),
         (0, 0, H), (L, 0, H), (L, W, H), (0, W, H),
@@ -262,7 +281,12 @@ def _draw_cargo_outline(ax, L: float, W: float, H: float) -> None:
 
 
 def _draw_placed(ax, placed: list[dict], palette) -> list:
-    """按门店分组、数组化 bar3d 绘制所有货物；返回图例 handles。"""
+    """按门店分组、数组化 bar3d 绘制所有货物；返回图例 handles。
+
+    T50g 修复：箱体透明度 0.55→0.92（旧值多层叠加后颜色互染、画面浑浊），
+    关闭光照暗面（shade=False，避免同色箱体各面深浅不一），描边加深加粗
+    （小件箱体轮廓清晰、便于逐件辨认）。
+    """
     groups: dict[str, list[dict]] = {}
     for p in placed:
         key = p.get("store_id") or "?"
@@ -275,9 +299,9 @@ def _draw_placed(ax, placed: list[dict], palette) -> list:
             continue
         xs, ys, zs, dxs, dys, dzs = map(list, zip(*entries))
         color = palette.get(sid, "#8c8c8c")
-        ax.bar3d(xs, ys, zs, dxs, dys, dzs, color=color, alpha=0.55,
-                 edgecolor="#334155", linewidth=0.25, shade=True)
-        handles.append(Patch(facecolor=color, edgecolor="#334155",
+        ax.bar3d(xs, ys, zs, dxs, dys, dzs, color=color, alpha=0.92,
+                 edgecolor="#475569", linewidth=0.4, shade=False)
+        handles.append(Patch(facecolor=color, edgecolor="#475569",
                              label=f"{sid}（{len(entries)} 件）"))
     return handles
 
