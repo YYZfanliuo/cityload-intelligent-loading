@@ -237,3 +237,43 @@ def test_app_t50e_archive_to_order_flow(monkeypatch, clean_catalog_ext):
     assert "新康药房" in success_text and "C01" in success_text, success_text[:160]
     assert "R0" in success_text, "应展示车次分配"
     assert len(at.image) >= 1
+
+
+def test_app_t50f_multi_scene_flow(monkeypatch):
+    """T50f：多单独立场景 —— 填入内置示例（6 单）→ 构建 → 方案 + 车次分配 + 路线图。"""
+    _clear_llm_env(monkeypatch)
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    [b for b in at.button if b.key == "multi_fill"][0].click()
+    at.run()
+    assert not at.exception
+    multi_area = [t for t in at.get("text_area") if t.key == "multi_text"][0]
+    assert len((multi_area.value or "").splitlines()) == 6, "内置示例应为 6 行"
+
+    [b for b in at.button if b.key == "multi_build"][0].click()
+    at.run()
+    assert not at.exception and not at.error
+    assert any("独立场景已生成" in s.value for s in at.success), [s.value for s in at.success]
+    assert len(at.image) >= 1, "应展示独立场景路线图"
+
+
+def test_app_t50f_merge_note_and_compare(monkeypatch):
+    """T50f：插单说明行 + 方案对比行（数据来自重跑前后两个 metrics，不硬编码）。"""
+    _clear_llm_env(monkeypatch)
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    [b for b in at.button if b.key == "nl_example_0"][0].click()
+    at.run()
+    # 说明行（解析成功后按钮下方可见）
+    captions = [c.value for c in at.caption]
+    assert any("并入当前数据集的 30 家门店场景" in c for c in captions), "应显示插单模式说明行"
+    # 执行合并 → 对比行
+    [b for b in at.button if b.key == "merge_run"][0].click()
+    at.run()
+    assert not at.exception and not at.error
+    infos = [i.value for i in at.info]
+    assert any("方案对比" in v and "原方案" in v for v in infos), infos

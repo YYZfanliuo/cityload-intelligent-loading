@@ -59,6 +59,16 @@ NL_EXAMPLES = [
     "明早 8 点给连锁药店22送 20 盒板蓝根颗粒",
 ]
 
+#: T50f：多单独立场景内置富示例（6 单、多家门店，可直接解析并建独立小场景）
+MULTI_EXAMPLES = [
+    "明天上午给连锁药店03送 4 箱感冒灵，11 点前到",
+    "明天上午给连锁药店12送 3 箱布洛芬和 2 盒维生素C",
+    "明天下午给连锁药店18送 6 盒板蓝根颗粒，15 点前到",
+    "明天给连锁药店25送 5 箱创可贴",
+    "明天上午给连锁药店09送 8 盒藿香正气水",
+    "明天下午 14 点到 17 点给连锁药店27送 4 箱口罩",
+]
+
 #: 本会话 LLM 配置对应的环境变量（仅运行时注入，用后清理）
 _LLM_ENV_KEYS = ("CITYLOAD_LLM_API_KEY", "CITYLOAD_LLM_BASE_URL", "CITYLOAD_LLM_MODEL")
 
@@ -179,6 +189,31 @@ STRINGS = {
         "catalog_saved": "已保存：{id}（{name}）",
         "catalog_invalid": "输入无效：{detail}",
         "catalog_sku_missing": "商品「{name}」缺少物理参数，无法加入场景——请先在「数据档案」中新增该商品。",
+        "merge_mode_note": "新订单将并入当前数据集的 30 家门店场景，整体重新配载——便于观察新订单如何被安排进既有配送方案。",
+        "merge_compare": "方案对比：原方案 {ov} 车 / {op} 件 → 新方案 {nv} 车 / {np} 件（{delta} 件）；里程 {od} → {nd} km。",
+        "nl_tab_single": "单条插单（并入现有场景）",
+        "nl_tab_multi": "多单独立场景（新建）",
+        "multi_note": "与「单条插单」的区别：此处把解析出的多张订单构建为一个独立小场景（仅含这些门店），"
+                      "从零规划路线与装载，不受 30 店大场景影响。门店坐标取自基础 / 扩展档案，路网现场重算。",
+        "multi_label": "多行下单需求（每行一单，最多 12 行）",
+        "multi_fill": "填入内置示例（6 单）",
+        "multi_run": "解析全部并构建独立场景",
+        "multi_spinner": "正在解析并构建独立场景（约 10～30 秒）…",
+        "multi_result_title": "独立场景方案",
+        "multi_assign_title": "订单 → 车次分配",
+        "multi_col_order": "订单号",
+        "multi_col_store": "门店",
+        "multi_col_route": "车次",
+        "multi_col_seq": "送达次序",
+        "multi_col_arrive": "预计到达",
+        "multi_errors": "以下行未能处理：",
+        "multi_err_parse": "第 {idx} 行：解析失败（{detail}）",
+        "multi_err_store": "第 {idx} 行：门店「{name}」不在配送网络内",
+        "multi_err_sku": "第 {idx} 行：商品「{name}」缺少物理参数（请先在数据档案建档）",
+        "multi_no_valid": "没有可用的订单行：请检查输入后重试。",
+        "multi_empty": "请输入至少一行下单需求。",
+        "multi_too_many": "行数过多（{n} 行）：MVP 最多支持 12 行。",
+        "multi_ok": "独立场景已生成：{n} 单 / {m} 家门店 / {v} 辆车。",
         "footer": "运行产物默认写入 outputs/app-tmp/（隔离目录），不覆盖已入库的 t25-final / t25-baseline。"
                   "命令行等效入口：python run.py --data data/ --out outputs/t25-final --comparison",
     },
@@ -305,6 +340,34 @@ STRINGS = {
         "catalog_invalid": "Invalid input: {detail}",
         "catalog_sku_missing": "Item \"{name}\" has no physical parameters and cannot join the scene "
                                "— please add it in the Data Catalog first.",
+        "merge_mode_note": "The new order joins the current 30-store dataset scene and the whole plan is "
+                           "re-optimized — making it easy to see how the order fits into the existing routes.",
+        "merge_compare": "Plan comparison: {ov} vehicles / {op} items → {nv} vehicles / {np} items "
+                         "({delta} items); distance {od} → {nd} km.",
+        "nl_tab_single": "Single order (merge into existing scene)",
+        "nl_tab_multi": "Multiple orders (standalone scene)",
+        "multi_note": "Unlike \"single order\", here the parsed orders build a standalone mini-scene "
+                      "(only these stores) — routed and packed from scratch, independent of the 30-store "
+                      "scene. Store coordinates come from the base/extended catalog; the network is rebuilt.",
+        "multi_label": "Order requests, one per line (up to 12 lines)",
+        "multi_fill": "Fill built-in example (6 orders)",
+        "multi_run": "Parse all and build standalone scene",
+        "multi_spinner": "Parsing and building the standalone scene (about 10–30 s)...",
+        "multi_result_title": "Standalone scene plan",
+        "multi_assign_title": "Order → route assignment",
+        "multi_col_order": "Order ID",
+        "multi_col_store": "Store",
+        "multi_col_route": "Route",
+        "multi_col_seq": "Stop",
+        "multi_col_arrive": "ETA",
+        "multi_errors": "Lines that could not be processed:",
+        "multi_err_parse": "Line {idx}: parse failed ({detail})",
+        "multi_err_store": "Line {idx}: store \"{name}\" is not in the delivery network",
+        "multi_err_sku": "Line {idx}: item \"{name}\" lacks physical parameters (add it in the catalog)",
+        "multi_no_valid": "No usable order lines — please check the input.",
+        "multi_empty": "Please enter at least one order line.",
+        "multi_too_many": "Too many lines ({n}): the MVP supports up to 12.",
+        "multi_ok": "Standalone scene built: {n} orders / {m} stores / {v} vehicles.",
         "footer": "Artifacts are written to outputs/app-tmp/ (isolated); t25-final / t25-baseline "
                   "are never overwritten. CLI equivalent: "
                   "python run.py --data data/ --out outputs/t25-final --comparison",
@@ -619,19 +682,32 @@ def _render_nl_result(result: dict, seed_key: str) -> None:
     st.markdown(f"**{t('nl_result_title')}**")
     _render_parsed_order(result)
 
-    # ---- T50d：将订单并入场景并重跑配载 ----
+    # ---- T50d/T50f：将订单并入场景并重跑配载 ----
     st.divider()
     items = result.get("items") or []
     if not items:
         st.button(t("merge_run_btn"), key="merge_run", disabled=True)
         st.caption(t("merge_disabled_hint"))
-    elif st.button(t("merge_run_btn"), type="primary", key="merge_run"):
-        with st.spinner(t("merge_spinner")):
-            try:
-                st.session_state["merged_result"] = _merge_and_run(result, seed_key)
-            except Exception as exc:  # 管线异常：明确提示，不崩界面
-                st.session_state["merged_result"] = {
-                    "error": "pipeline", "detail": f"{type(exc).__name__}: {exc}"}
+    else:
+        run_merge = st.button(t("merge_run_btn"), type="primary", key="merge_run")
+        st.caption(t("merge_mode_note"))  # T50f：说明插单语义（并入 30 店场景重排）
+        if run_merge:
+            with st.spinner(t("merge_spinner")):
+                try:
+                    base_metrics = {}
+                    if st.session_state.get("result_seed") == seed_key:
+                        base_metrics = (st.session_state.get("result") or {}).get("metrics") or {}
+                    if not base_metrics:  # 未跑过主方案：先取原场景指标（缓存命中则秒回）
+                        base = run_cached(seed_key, str(DATASETS[seed_key]["dir"]), False)
+                        st.session_state["result"] = base
+                        st.session_state["result_seed"] = seed_key
+                        base_metrics = base["metrics"]
+                    merged = _merge_and_run(result, seed_key)
+                    merged["base_metrics"] = base_metrics  # T50f 方案对比（重跑前指标）
+                    st.session_state["merged_result"] = merged
+                except Exception as exc:  # 管线异常：明确提示，不崩界面
+                    st.session_state["merged_result"] = {
+                        "error": "pipeline", "detail": f"{type(exc).__name__}: {exc}"}
 
     merged = st.session_state.get("merged_result")
     if merged and merged.get("seed") not in (None, seed_key):
@@ -846,20 +922,7 @@ def _merge_and_run(parsed: dict, seed_key: str) -> dict:
     target_sid = store["store_id"]
     merged = copy.deepcopy(orders)
     new_order_id = _next_merge_order_id(merged["orders"])
-    new_items = []
-    for it in parsed.get("items") or []:
-        new_items.append({
-            "sku": it.get("sku"),
-            "name": it.get("name"),
-            "qty": int(it.get("qty") or 1),
-            "weight_kg": it.get("weight_kg"),
-            "length_cm": it.get("length_cm"),
-            "width_cm": it.get("width_cm"),
-            "height_cm": it.get("height_cm"),
-            "fragile": bool(it.get("fragile")),
-            "stackable": bool(it.get("stackable", True)),
-            "max_stack_layers": int(it.get("max_stack_layers") or 6),
-        })
+    new_items = _normalize_items(parsed.get("items") or [])
 
     is_extension = target_sid not in {o.get("store_id") for o in merged["orders"]}
     if is_extension:
@@ -956,6 +1019,19 @@ def _render_merged_result(m: dict) -> None:
                      arrive=info.get("arrive") or "—"))
     else:
         st.warning(t("merge_no_route"))
+
+    # T50f：方案对比（数据从重跑前后的两个 metrics 读取，不硬编码）
+    base_m = m.get("base_metrics") or {}
+    new_m = m.get("metrics") or {}
+    ov, nv = base_m.get("vehicle_count"), new_m.get("vehicle_count")
+    op, np_ = base_m.get("placed_item_count"), new_m.get("placed_item_count")
+    if None not in (ov, nv, op, np_):
+        delta = int(np_) - int(op)
+        st.info(t("merge_compare",
+                  ov=f"{ov:.0f}", op=f"{op}", nv=f"{nv:.0f}", np=f"{np_}",
+                  delta=f"+{delta}" if delta >= 0 else str(delta),
+                  od=f"{(base_m.get('total_distance_km') or 0):.1f}",
+                  nd=f"{(new_m.get('total_distance_km') or 0):.1f}"))
     st.caption(t("merge_note"))
 
     mm = m.get("metrics") or {}
@@ -1097,6 +1173,220 @@ def _render_catalog_section(seed_key: str) -> None:
                 st.rerun()
 
 
+# ---------------------------------------------------------------- 多单独立场景（T50f）
+
+
+def _normalize_items(raw_items: list) -> list:
+    """把解析出的 items 规范化为订单 item 结构（供并入 / 独立场景共用）。"""
+    out = []
+    for it in raw_items or []:
+        out.append({
+            "sku": it.get("sku"),
+            "name": it.get("name"),
+            "qty": int(it.get("qty") or 1),
+            "weight_kg": it.get("weight_kg"),
+            "length_cm": it.get("length_cm"),
+            "width_cm": it.get("width_cm"),
+            "height_cm": it.get("height_cm"),
+            "fragile": bool(it.get("fragile")),
+            "stackable": bool(it.get("stackable", True)),
+            "max_stack_layers": int(it.get("max_stack_layers") or 6),
+        })
+    return out
+
+
+def _build_independent_scene(text: str, seed_key: str) -> dict:
+    """T50f：多行订单（每行一单）→ 独立小场景（中心仓 + 涉及门店）→ 完整配载。
+
+    门店坐标取自基础 / 扩展档案；路网用 Haversine 现场重建（口径同 data/gen_data.py）；
+    vehicles / rules 沿用当前数据集配置；产物仅写 outputs/app-tmp/multi-scene/。
+    """
+    from agent.parser import parse_requirement  # 延迟导入
+
+    lines = [ln.strip() for ln in str(text or "").splitlines() if ln.strip()]
+    if not lines:
+        return {"error": "empty"}
+    if len(lines) > 12:
+        return {"error": "too_many", "count": len(lines)}
+
+    data_dir = Path(DATASETS[seed_key]["dir"])
+    base_orders = json.loads((data_dir / "orders.json").read_text(encoding="utf-8"))["orders"]
+    base_network = json.loads((data_dir / "network.json").read_text(encoding="utf-8"))
+    wh_node = next((nd for nd in base_network.get("nodes") or [] if nd["id"] == "WH01"), None)
+    ext_stores = _load_ext_stores()
+
+    parsed_lines, errors = [], []
+    for idx, line in enumerate(lines, start=1):
+        with _llm_env():
+            r = parse_requirement(line)
+        _enrich_items_with_ext(r)
+        if r.get("error"):
+            errors.append(t("multi_err_parse", idx=idx,
+                            detail=str(r.get("detail") or r.get("error"))[:50]))
+            continue
+        store = _match_store(r, base_orders, ext_stores)
+        if store is None:
+            errors.append(t("multi_err_store", idx=idx,
+                            name=str(r.get("store_name") or line[:20])))
+            continue
+        missing = [it.get("name") for it in (r.get("items") or [])
+                   if not (it.get("weight_kg") and it.get("length_cm")
+                           and it.get("width_cm") and it.get("height_cm"))]
+        if missing:
+            errors.append(t("multi_err_sku", idx=idx, name=str(missing[0])))
+            continue
+        parsed_lines.append((idx, r, store))
+
+    if not parsed_lines:
+        return {"error": "no_valid", "errors": errors}
+
+    # ---- 组装订单（同门店多行合并为一单）----
+    orders_by_sid: dict = {}
+    for idx, r, store in parsed_lines:
+        sid = store["store_id"]
+        items = _normalize_items(r.get("items") or [])
+        if sid not in orders_by_sid:
+            orders_by_sid[sid] = {
+                "order_id": f"NL-{len(orders_by_sid) + 1:02d}",
+                "store_id": sid,
+                "store_name": store.get("store_name"),
+                "lat": float(store["lat"]), "lng": float(store["lng"]),
+                "time_window": list(r.get("time_window")
+                                    or store.get("time_window") or ["08:00", "18:00"]),
+                "service_minutes": int(store.get("service_minutes")
+                                       or r.get("service_minutes") or 15),
+                "items": items,
+            }
+        else:
+            entry = orders_by_sid[sid]
+            entry["items"] += items
+            if r.get("service_minutes"):
+                entry["service_minutes"] += int(r["service_minutes"])
+    orders_list = list(orders_by_sid.values())
+
+    # ---- 现场重建路网（WH + 涉及门店；Haversine，口径同 gen_data.py）----
+    nodes = [dict(wh_node)] if wh_node else [{"id": "WH01", "lat": 30.2741, "lng": 120.1551}]
+    for o in orders_list:
+        nodes.append({"id": o["store_id"], "lat": o["lat"], "lng": o["lng"]})
+    network = _build_network(nodes)
+
+    scene_dir = APP_TMP / "multi-scene" / seed_key
+    dataset_dir = scene_dir / "data"
+    dataset_dir.mkdir(parents=True, exist_ok=True)
+    (dataset_dir / "orders.json").write_text(
+        json.dumps({"meta": {"scenario": "nl_multi"}, "orders": orders_list},
+                   ensure_ascii=False, indent=2), encoding="utf-8")
+    (dataset_dir / "network.json").write_text(
+        json.dumps(network, ensure_ascii=False, indent=2), encoding="utf-8")
+    for name in ("vehicles.json", "rules.json"):
+        (dataset_dir / name).write_text((data_dir / name).read_text(encoding="utf-8"),
+                                        encoding="utf-8")
+
+    out_dir = scene_dir / "out"
+    result = pipeline.run_pipeline(str(dataset_dir), out_dir, baseline=False, comparison=False)
+
+    route_of = {}
+    for route in result["routes"].get("routes") or []:
+        seq = [s for s in (route.get("sequence") or []) if s != "WH01"]
+        stop_map = {d.get("node"): d for d in (route.get("stop_details") or [])}
+        for o in orders_list:
+            sid = o["store_id"]
+            if sid in seq:
+                route_of[sid] = {
+                    "route_id": route.get("route_id"),
+                    "vehicle_type": route.get("vehicle_type"),
+                    "seq": seq.index(sid) + 1,
+                    "total": len(seq),
+                    "arrive": (stop_map.get(sid) or {}).get("arrive"),
+                }
+    figures = [Path(p) for p in result["figures"]]
+    route_map = next((p for p in figures if p.name == "route_map.png"), None)
+    return {
+        "error": None,
+        "seed": seed_key,
+        "errors": errors,
+        "orders": orders_list,
+        "route_of": route_of,
+        "metrics": result["metrics"].get("metrics") or {},
+        "route_map": str(route_map) if route_map else None,
+        "out_dir": str(out_dir),
+    }
+
+
+def _render_multi_tab(seed_key: str) -> None:
+    """T50f：多单独立场景模式的 UI（文本输入 → 构建 → 展示）。"""
+    st.caption(t("multi_note"))
+    if st.button(t("multi_fill"), key="multi_fill"):
+        st.session_state["multi_text"] = "\n".join(MULTI_EXAMPLES)
+    multi_text = st.text_area(t("multi_label"), key="multi_text", height=150,
+                              placeholder=MULTI_EXAMPLES[0])
+    if st.button(t("multi_run"), type="primary", key="multi_build"):
+        with st.spinner(t("multi_spinner")):
+            try:
+                st.session_state["multi_result"] = _build_independent_scene(multi_text, seed_key)
+            except Exception as exc:  # 管线异常：明确提示，不崩界面
+                st.session_state["multi_result"] = {
+                    "error": "pipeline", "detail": f"{type(exc).__name__}: {exc}"}
+    mr = st.session_state.get("multi_result")
+    if mr and mr.get("seed") not in (None, seed_key):
+        mr = None  # 数据集已切换：旧场景结果不再适用
+    if mr:
+        _render_multi_result(mr)
+
+
+def _render_multi_result(mr: dict) -> None:
+    """展示独立场景结果：错误清单 + 方案指标 + 订单→车次分配 + 路线图。"""
+    err = mr.get("error")
+    if err == "empty":
+        st.warning(t("multi_empty"))
+        return
+    if err == "too_many":
+        st.warning(t("multi_too_many", n=mr.get("count")))
+        return
+    if err == "no_valid":
+        st.warning(t("multi_no_valid"))
+        for e in mr.get("errors") or []:
+            st.caption(f"- {e}")
+        return
+    if err:
+        st.error(t("merge_failed", detail=str(mr.get("detail") or err)))
+        return
+
+    if mr.get("errors"):
+        st.warning(t("multi_errors"))
+        for e in mr["errors"]:
+            st.caption(f"- {e}")
+
+    mm = mr["metrics"]
+    st.success(t("multi_ok", n=len(mr["orders"]),
+                 m=len({o["store_id"] for o in mr["orders"]}),
+                 v=mm.get("vehicle_count", "—")))
+    placed, total = mm.get("placed_item_count"), mm.get("total_item_count")
+    cols = st.columns(4)
+    cols[0].metric(t("kpi_vehicles"), f"{mm.get('vehicle_count', '—')}{t('unit_vehicles')}")
+    cols[1].metric(t("kpi_distance"), f"{mm.get('total_distance_km', '—')} km")
+    cols[2].metric(t("kpi_cost"), f"¥{mm.get('total_cost', '—')}")
+    cols[3].metric(t("kpi_fill"),
+                   f"{placed / total * 100:.1f}%" if total and placed is not None else "—")
+
+    st.markdown(f"**{t('multi_assign_title')}**")
+    rows = []
+    for o in mr["orders"]:
+        info = mr["route_of"].get(o["store_id"]) or {}
+        rows.append({
+            t("multi_col_order"): o["order_id"],
+            t("multi_col_store"): o["store_name"],
+            t("multi_col_route"): info.get("route_id", "—"),
+            t("multi_col_seq"): f'{info.get("seq", "—")}/{info.get("total", "—")}',
+            t("multi_col_arrive"): info.get("arrive") or "—",
+        })
+    st.dataframe(rows, width="stretch", hide_index=True)
+
+    if mr.get("route_map"):
+        st.markdown(f"**{t('merge_route_title')}**")
+        st.image(mr["route_map"], width="stretch")
+
+
 # ---------------------------------------------------------------- 主界面
 
 
@@ -1128,6 +1418,7 @@ def main() -> None:
             try:
                 st.session_state["result"] = run_cached(seed_key, str(DATASETS[seed_key]["dir"]),
                                                         comparison)
+                st.session_state["result_seed"] = seed_key
             except Exception as exc:  # 失败不崩界面，给出明确错误
                 st.session_state["result"] = None
                 st.error(f"{t('error_prefix')}{exc}")
@@ -1143,24 +1434,28 @@ def main() -> None:
         _render_catalog_section(seed_key)
 
     with st.expander(t("nl_title"), expanded=False):
-        st.caption(t("nl_lang_note"))
-        to_parse = None
-        example_cols = st.columns(len(NL_EXAMPLES))
-        for i, example in enumerate(NL_EXAMPLES):
-            if example_cols[i].button(f'{t("nl_example")} {i + 1}', key=f"nl_example_{i}",
-                                      help=example):
-                st.session_state["nl_text"] = example   # 填入文本框（供查看/编辑）
-                to_parse = example                       # 并直接解析
-        text = st.text_area(t("nl_label"), key="nl_text", height=90,
-                            placeholder=NL_EXAMPLES[0])
-        if st.button(t("nl_parse_btn"), type="primary", key="nl_parse"):
-            to_parse = text
-        if to_parse is not None:
-            st.session_state.pop("merged_result", None)  # 新解析：清除上一次合并结果
-            _nl_parse_only(to_parse)
-        parsed = st.session_state.get("nl_result")
-        if parsed is not None:
-            _render_nl_result(parsed, seed_key)
+        tab_single, tab_multi = st.tabs([t("nl_tab_single"), t("nl_tab_multi")])
+        with tab_single:
+            st.caption(t("nl_lang_note"))
+            to_parse = None
+            example_cols = st.columns(len(NL_EXAMPLES))
+            for i, example in enumerate(NL_EXAMPLES):
+                if example_cols[i].button(f'{t("nl_example")} {i + 1}', key=f"nl_example_{i}",
+                                          help=example):
+                    st.session_state["nl_text"] = example   # 填入文本框（供查看/编辑）
+                    to_parse = example                       # 并直接解析
+            text = st.text_area(t("nl_label"), key="nl_text", height=90,
+                                placeholder=NL_EXAMPLES[0])
+            if st.button(t("nl_parse_btn"), type="primary", key="nl_parse"):
+                to_parse = text
+            if to_parse is not None:
+                st.session_state.pop("merged_result", None)  # 新解析：清除上一次合并结果
+                _nl_parse_only(to_parse)
+            parsed = st.session_state.get("nl_result")
+            if parsed is not None:
+                _render_nl_result(parsed, seed_key)
+        with tab_multi:
+            _render_multi_tab(seed_key)
 
     st.divider()
     st.caption(t("footer"))
