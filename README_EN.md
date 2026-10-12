@@ -128,6 +128,12 @@ pytest tests -q
 
 **③ Interactive experience (optional)**: see "Interactive UI" below.
 
+**④ Demo video (cloud drive, ~3 min)** — full walkthrough: pipeline run + natural-language ordering + multi-order standalone scene + LLM enhancement panel.
+
+- Link: https://pan.quark.cn/s/b3e529b72674
+- Access code (提取码): `jp4s`
+- File: 演示demo.mp4 (Quark Drive)
+
 **Interactive UI (optional)**:
 
 ```bash
