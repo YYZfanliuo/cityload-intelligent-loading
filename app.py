@@ -48,6 +48,9 @@ DATASETS = {
 }
 APP_TMP = ROOT / "outputs" / "app-tmp"
 
+#: 扩展档案存储目录（T50e：新增门店 / 商品；会话持久，不动 data/ 原始数据集）
+CATALOG_EXT = APP_TMP / "catalog-ext"
+
 #: 自然语言下单内置示例（解析器当前支持中文输入；按钮文案即示例文本）
 #: 门店均为当前数据集门店库内门店（连锁药店01–30），可完整体验 T50d 端到端串联
 NL_EXAMPLES = [
@@ -147,6 +150,35 @@ STRINGS = {
         "merge_failed": "合并或重跑失败：{detail}",
         "merge_metrics_title": "合并后新方案指标",
         "merge_route_title": "合并后路线图",
+        "catalog_title": "数据档案（门店 / 商品）",
+        "catalog_note": "可查看当前档案并新增门店 / 商品（MVP 仅支持新增；编辑 / 删除为后续项）。"
+                        "扩展档案保存于 outputs/app-tmp/catalog-ext/，不改动原始数据集。"
+                        "新门店与新商品将参与「并入场景」与「独立场景」的匹配。",
+        "catalog_stores_title": "门店档案",
+        "catalog_skus_title": "商品档案",
+        "catalog_source_tag": "来源",
+        "catalog_base": "基础",
+        "catalog_ext": "扩展",
+        "catalog_search": "商品搜索（名称 / SKU）",
+        "catalog_add_store": "新增门店",
+        "catalog_store_name": "门店名称（下单时用此名称，如“新康药房”）",
+        "catalog_lat": "纬度",
+        "catalog_lng": "经度",
+        "catalog_tw_start": "时间窗起（HH:MM）",
+        "catalog_tw_end": "时间窗止（HH:MM）",
+        "catalog_service": "卸货服务时长（分钟）",
+        "catalog_save_store": "保存门店",
+        "catalog_add_sku": "新增商品",
+        "catalog_sku_name": "商品名称（下单时用此名称）",
+        "catalog_weight": "单件重量（kg）",
+        "catalog_dims": "尺寸 长 / 宽 / 高（cm）",
+        "catalog_fragile": "易碎",
+        "catalog_stackable": "可堆叠",
+        "catalog_layers": "层数上限",
+        "catalog_save_sku": "保存商品",
+        "catalog_saved": "已保存：{id}（{name}）",
+        "catalog_invalid": "输入无效：{detail}",
+        "catalog_sku_missing": "商品「{name}」缺少物理参数，无法加入场景——请先在「数据档案」中新增该商品。",
         "footer": "运行产物默认写入 outputs/app-tmp/（隔离目录），不覆盖已入库的 t25-final / t25-baseline。"
                   "命令行等效入口：python run.py --data data/ --out outputs/t25-final --comparison",
     },
@@ -242,6 +274,37 @@ STRINGS = {
         "merge_failed": "Merge / re-optimization failed: {detail}",
         "merge_metrics_title": "Metrics after merge",
         "merge_route_title": "Route map after merge",
+        "catalog_title": "Data Catalog (stores / SKUs)",
+        "catalog_note": "Review the current catalog and add new stores / SKUs below (MVP: add only; "
+                        "edit/delete coming later). The extended catalog lives in "
+                        "outputs/app-tmp/catalog-ext/ and never modifies the original datasets. "
+                        "New stores and SKUs participate in merge and standalone-scene matching.",
+        "catalog_stores_title": "Store catalog",
+        "catalog_skus_title": "SKU catalog",
+        "catalog_source_tag": "Source",
+        "catalog_base": "base",
+        "catalog_ext": "extended",
+        "catalog_search": "Search SKUs (name / SKU)",
+        "catalog_add_store": "Add store",
+        "catalog_store_name": "Store name (use it in orders, e.g. \"Xinkang Pharmacy\")",
+        "catalog_lat": "Latitude",
+        "catalog_lng": "Longitude",
+        "catalog_tw_start": "Time window start (HH:MM)",
+        "catalog_tw_end": "Time window end (HH:MM)",
+        "catalog_service": "Service minutes",
+        "catalog_save_store": "Save store",
+        "catalog_add_sku": "Add SKU",
+        "catalog_sku_name": "SKU name (use it in orders)",
+        "catalog_weight": "Unit weight (kg)",
+        "catalog_dims": "Dimensions L / W / H (cm)",
+        "catalog_fragile": "Fragile",
+        "catalog_stackable": "Stackable",
+        "catalog_layers": "Max stack layers",
+        "catalog_save_sku": "Save SKU",
+        "catalog_saved": "Saved: {id} ({name})",
+        "catalog_invalid": "Invalid input: {detail}",
+        "catalog_sku_missing": "Item \"{name}\" has no physical parameters and cannot join the scene "
+                               "— please add it in the Data Catalog first.",
         "footer": "Artifacts are written to outputs/app-tmp/ (isolated); t25-final / t25-baseline "
                   "are never overwritten. CLI equivalent: "
                   "python run.py --data data/ --out outputs/t25-final --comparison",
@@ -577,14 +640,114 @@ def _render_nl_result(result: dict, seed_key: str) -> None:
         _render_merged_result(merged)
 
 
+# ---------------------------------------------------------------- 扩展档案（T50e）
+
+
+def _load_ext_stores() -> list:
+    """读取扩展门店档案（outputs/app-tmp/catalog-ext/stores.json；会话持久）。"""
+    path = CATALOG_EXT / "stores.json"
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("stores") or []
+    except Exception:
+        return []
+
+
+def _save_ext_store(store: dict) -> str:
+    """追加保存一家扩展门店，返回分配的编号（C##）。"""
+    stores = _load_ext_stores()
+    existing = {s.get("store_id") for s in stores}
+    n = 1
+    while f"C{n:02d}" in existing:
+        n += 1
+    store = dict(store)
+    store["store_id"] = f"C{n:02d}"
+    stores.append(store)
+    CATALOG_EXT.mkdir(parents=True, exist_ok=True)
+    (CATALOG_EXT / "stores.json").write_text(
+        json.dumps({"stores": stores}, ensure_ascii=False, indent=2), encoding="utf-8")
+    return store["store_id"]
+
+
+def _load_ext_skus() -> list:
+    """读取扩展商品档案（outputs/app-tmp/catalog-ext/skus.json）。"""
+    path = CATALOG_EXT / "skus.json"
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("skus") or []
+    except Exception:
+        return []
+
+
+def _save_ext_sku(sku: dict) -> str:
+    """追加保存一条扩展商品，返回分配的编号（CSKU###）。"""
+    skus = _load_ext_skus()
+    existing = {s.get("sku") for s in skus}
+    n = 1
+    while f"CSKU{n:03d}" in existing:
+        n += 1
+    sku = dict(sku)
+    sku["sku"] = f"CSKU{n:03d}"
+    skus.append(sku)
+    CATALOG_EXT.mkdir(parents=True, exist_ok=True)
+    (CATALOG_EXT / "skus.json").write_text(
+        json.dumps({"skus": skus}, ensure_ascii=False, indent=2), encoding="utf-8")
+    return sku["sku"]
+
+
+def _collect_base_skus(order_list: list) -> list:
+    """从基础订单聚合商品档案（distinct SKU，含物理参数）。"""
+    seen = {}
+    for o in order_list:
+        for it in o.get("items") or []:
+            sku = it.get("sku")
+            if sku and sku not in seen:
+                seen[sku] = {k: it.get(k) for k in
+                             ("sku", "name", "weight_kg", "length_cm", "width_cm", "height_cm",
+                              "fragile", "stackable", "max_stack_layers")}
+    return sorted(seen.values(), key=lambda x: str(x["sku"]))
+
+
+def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Haversine 距离（口径同 data/gen_data.py：R=6371.0088 km）。"""
+    import math
+
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = math.radians(lat2 - lat1), math.radians(lng2 - lng1)
+    a = math.sin(dp / 2.0) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2.0) ** 2
+    return 2.0 * 6371.0088 * math.asin(math.sqrt(a))
+
+
+def _build_network(nodes: list) -> dict:
+    """由节点表重建路网：对称距离矩阵 + 30 km/h 时长矩阵（口径同 data/gen_data.py）。"""
+    n = len(nodes)
+    dist = [[0.0] * n for _ in range(n)]
+    for a in range(n):
+        for b in range(a + 1, n):
+            d = round(_haversine_km(nodes[a]["lat"], nodes[a]["lng"],
+                                    nodes[b]["lat"], nodes[b]["lng"]), 4)
+            dist[a][b] = dist[b][a] = d
+    dur = [[round(d / 30.0 * 60.0, 2) for d in row] for row in dist]
+    return {"nodes": [dict(nd) for nd in nodes], "node_order": [nd["id"] for nd in nodes],
+            "distance_matrix_km": dist, "duration_matrix_min": dur}
+
+
+def _time_hhmm_ok(value: str) -> bool:
+    return bool(re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(value or "").strip()))
+
+
 # ---------------------------------------------------------------- T50d 合并与重跑
 
 
-def _match_store(parsed: dict, order_list: list) -> dict | None:
-    """在当前数据集门店库中反查门店（不编造坐标），失败返回 None。
+def _match_store(parsed: dict, order_list: list, ext_stores: list | None = None) -> dict | None:
+    """在当前门店库中反查门店（不编造坐标），失败返回 None。
 
-    依次尝试：① store_id 精确；② 门店名精确（归一空格）；③ 「连锁药店+尾号」提取
-    （规则解析器可能截断店名尾号，故同时扫描 raw_text 原文）；④ 店名中的纯数字编号。
+    匹配顺序 = **基础档案 + 扩展档案**（T50e）：
+    ① store_id 精确；② 门店名精确（归一空格）；③ 「连锁药店+尾号」提取（规则解析器
+    可能截断店名尾号，故同时扫描 raw_text 原文）；④ 店名中的纯数字编号；
+    ⑤ 扩展档案：名称精确 / 原文包含扩展店名。
     """
     sid = str(parsed.get("store_id") or "").strip().upper()
     by_id = {o["store_id"]: o for o in order_list if o.get("store_id")}
@@ -598,7 +761,8 @@ def _match_store(parsed: dict, order_list: list) -> dict | None:
             return o
 
     meta = parsed.get("parse_meta") or {}
-    for src in (name, norm(meta.get("raw_text"))):
+    raw = norm(meta.get("raw_text"))
+    for src in (name, raw):
         m = re.search(r"连锁药店\s*0*(\d{1,2})", src)
         if m:
             cand = f"S{int(m.group(1)):02d}"
@@ -610,7 +774,39 @@ def _match_store(parsed: dict, order_list: list) -> dict | None:
         cand = f"S{int(m.group(1)):02d}"
         if cand in by_id:
             return by_id[cand]
+
+    # ---- 扩展档案（T50e）：名称精确 / 原文包含扩展店名 ----
+    for st_ in ext_stores or []:
+        ext_name = norm(st_.get("store_name"))
+        if ext_name and (ext_name == name or ext_name in raw):
+            return st_
     return None
+
+
+def _enrich_items_with_ext(parsed: dict) -> None:
+    """用扩展商品档案补全 items 物理参数（T50e；仅填补缺失项，不覆盖已有参数）。"""
+    ext = _load_ext_skus()
+    if not ext:
+        return
+
+    def norm(s):
+        return re.sub(r"\s+", "", str(s or "")).lower()
+
+    for it in parsed.get("items") or []:
+        if it.get("weight_kg") and it.get("length_cm") and it.get("width_cm") \
+                and it.get("height_cm"):
+            continue
+        item_name = norm(it.get("name"))
+        if not item_name:
+            continue
+        for sku in ext:
+            sku_name = norm(sku.get("name"))
+            if sku_name and (sku_name in item_name or item_name in sku_name):
+                it["sku"] = sku.get("sku")
+                for key in ("weight_kg", "length_cm", "width_cm", "height_cm",
+                            "fragile", "stackable", "max_stack_layers"):
+                    it[key] = sku.get(key)
+                break
 
 
 def _next_merge_order_id(order_list: list) -> str:
@@ -623,24 +819,33 @@ def _next_merge_order_id(order_list: list) -> str:
 
 
 def _merge_and_run(parsed: dict, seed_key: str) -> dict:
-    """T50d：把解析订单并入当前场景（临时目录），重跑配载并返回展示信息。
+    """T50d/T50e：把解析订单并入当前场景（临时目录），重跑配载并返回展示信息。
 
-    合并规则（为保持“每门店一单”的路由契约）：新订单并入其目标门店的既有订单——
-    items 追加、数量保留；time_window 采用新解析值（若解析到）；service_minutes 相加；
-    并在订单上留痕 merged_orders 便于追溯。坐标一律取自门店库，绝不编造。
-    全部产物仅写 outputs/app-tmp/merged-scene/，不改动 data/ 与已入库产物。
+    合并规则（为保持“每门店一单”的路由契约）：
+    * 基础门店 → 新订单并入其目标门店的既有订单（items 追加、time_window 取新值、
+      service_minutes 相加、merged_orders 留痕）；
+    * 扩展门店（T50e 档案新增，有坐标）→ 追加为场景新订单，并用 Haversine 重建
+      路网（加节点 + 重算距离/时长矩阵，口径同 data/gen_data.py）。
+    坐标一律取自档案，绝不编造；产物仅写 outputs/app-tmp/merged-scene/。
     """
     data_dir = Path(DATASETS[seed_key]["dir"])
     orders = json.loads((data_dir / "orders.json").read_text(encoding="utf-8"))
-    store = _match_store(parsed, orders.get("orders") or [])
+    network = json.loads((data_dir / "network.json").read_text(encoding="utf-8"))
+
+    _enrich_items_with_ext(parsed)  # T50e：扩展商品档案补全物理参数
+    store = _match_store(parsed, orders.get("orders") or [], _load_ext_stores())
     if store is None:
         return {"error": "store_not_found", "store_name": parsed.get("store_name")}
 
+    # 物理参数齐全性校验（不编造参数；缺失时提示先建档）
+    for it in parsed.get("items") or []:
+        if not (it.get("weight_kg") and it.get("length_cm") and it.get("width_cm")
+                and it.get("height_cm")):
+            return {"error": "sku_missing", "name": it.get("name")}
+
     target_sid = store["store_id"]
     merged = copy.deepcopy(orders)
-    target = next(o for o in merged["orders"] if o.get("store_id") == target_sid)
     new_order_id = _next_merge_order_id(merged["orders"])
-
     new_items = []
     for it in parsed.get("items") or []:
         new_items.append({
@@ -655,22 +860,46 @@ def _merge_and_run(parsed: dict, seed_key: str) -> dict:
             "stackable": bool(it.get("stackable", True)),
             "max_stack_layers": int(it.get("max_stack_layers") or 6),
         })
-    target["items"] = list(target.get("items") or []) + new_items
-    if parsed.get("time_window"):
-        target["time_window"] = list(parsed["time_window"])
-    try:
-        target["service_minutes"] = int(target.get("service_minutes") or 0) + \
-            int(parsed.get("service_minutes") or 0)
-    except (TypeError, ValueError):
-        pass
-    target.setdefault("merged_orders", []).append(new_order_id)  # 留痕（下游忽略）
+
+    is_extension = target_sid not in {o.get("store_id") for o in merged["orders"]}
+    if is_extension:
+        # 扩展门店：追加新订单 + 重建路网（含新节点）
+        merged["orders"].append({
+            "order_id": new_order_id,
+            "store_id": target_sid,
+            "store_name": store.get("store_name"),
+            "lat": float(store["lat"]),
+            "lng": float(store["lng"]),
+            "time_window": list(parsed.get("time_window")
+                                or store.get("time_window") or ["08:00", "18:00"]),
+            "service_minutes": int(store.get("service_minutes")
+                                   or parsed.get("service_minutes") or 15),
+            "items": new_items,
+        })
+        nodes = [dict(nd) for nd in network.get("nodes") or []]
+        nodes.append({"id": target_sid, "lat": float(store["lat"]), "lng": float(store["lng"])})
+        network = _build_network(nodes)
+    else:
+        # 基础门店：并入既有订单
+        target = next(o for o in merged["orders"] if o.get("store_id") == target_sid)
+        target["items"] = list(target.get("items") or []) + new_items
+        if parsed.get("time_window"):
+            target["time_window"] = list(parsed["time_window"])
+        try:
+            target["service_minutes"] = int(target.get("service_minutes") or 0) + \
+                int(parsed.get("service_minutes") or 0)
+        except (TypeError, ValueError):
+            pass
+        target.setdefault("merged_orders", []).append(new_order_id)  # 留痕（下游忽略）
 
     # ---- 写临时数据集（隔离目录）----
     dataset_dir = APP_TMP / "merged-scene" / seed_key / "data"
     dataset_dir.mkdir(parents=True, exist_ok=True)
     (dataset_dir / "orders.json").write_text(
         json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
-    for name in ("vehicles.json", "network.json", "rules.json"):
+    (dataset_dir / "network.json").write_text(
+        json.dumps(network, ensure_ascii=False, indent=2), encoding="utf-8")
+    for name in ("vehicles.json", "rules.json"):
         (dataset_dir / name).write_text((data_dir / name).read_text(encoding="utf-8"),
                                         encoding="utf-8")
 
@@ -712,6 +941,8 @@ def _render_merged_result(m: dict) -> None:
     if m.get("error"):
         if m.get("error") == "store_not_found":
             st.warning(t("merge_store_not_found", name=str(m.get("store_name") or "—")))
+        elif m.get("error") == "sku_missing":
+            st.warning(t("catalog_sku_missing", name=str(m.get("name") or "—")))
         else:
             st.error(t("merge_failed", detail=str(m.get("detail") or m.get("error"))))
         return
@@ -739,6 +970,131 @@ def _render_merged_result(m: dict) -> None:
     if m.get("route_map"):
         st.markdown(f"**{t('merge_route_title')}**")
         st.image(m["route_map"], width="stretch")
+
+
+# ---------------------------------------------------------------- 数据档案 UI（T50e）
+
+
+def _render_catalog_section(seed_key: str) -> None:
+    """T50e：门店 / 商品档案展示 + 新增表单（扩展档案持久于 outputs/app-tmp/catalog-ext/）。"""
+    st.caption(t("catalog_note"))
+    notice = st.session_state.pop("cat_notice", None)
+    if notice:
+        st.success(notice)
+
+    data_dir = Path(DATASETS[seed_key]["dir"])
+    base_orders = json.loads((data_dir / "orders.json").read_text(encoding="utf-8"))["orders"]
+    ext_stores = _load_ext_stores()
+    ext_skus = _load_ext_skus()
+
+    # ---- 门店档案 ----
+    st.markdown(f"**{t('catalog_stores_title')}**")
+
+    def _store_row(o: dict, tag: str) -> dict:
+        return {
+            "ID": o.get("store_id"),
+            t("nl_col_store"): o.get("store_name"),
+            t("catalog_lat"): o.get("lat"),
+            t("catalog_lng"): o.get("lng"),
+            t("nl_col_window"): "–".join(str(x) for x in (o.get("time_window") or [])) or "—",
+            t("nl_col_service"): o.get("service_minutes"),
+            t("catalog_source_tag"): tag,
+        }
+
+    store_rows = [_store_row(o, t("catalog_base")) for o in base_orders]
+    store_rows += [_store_row(s, t("catalog_ext")) for s in ext_stores]
+    st.dataframe(store_rows, width="stretch", hide_index=True)
+
+    with st.expander(t("catalog_add_store"), expanded=False):
+        s_name = st.text_input(t("catalog_store_name"), key="cat_store_name")
+        c1, c2, c3 = st.columns(3)
+        s_lat = c1.number_input(t("catalog_lat"), min_value=-90.0, max_value=90.0,
+                                value=30.3000, step=0.001, format="%.4f", key="cat_store_lat")
+        s_lng = c2.number_input(t("catalog_lng"), min_value=-180.0, max_value=180.0,
+                                value=120.1500, step=0.001, format="%.4f", key="cat_store_lng")
+        s_service = c3.number_input(t("catalog_service"), min_value=1, max_value=120,
+                                    value=15, key="cat_store_service")
+        c4, c5 = st.columns(2)
+        s_tw1 = c4.text_input(t("catalog_tw_start"), value="09:00", key="cat_store_tw1")
+        s_tw2 = c5.text_input(t("catalog_tw_end"), value="17:00", key="cat_store_tw2")
+        if st.button(t("catalog_save_store"), key="cat_store_save"):
+            detail = ""
+            if not str(s_name).strip():
+                detail = t("catalog_store_name")
+            elif not _time_hhmm_ok(s_tw1) or not _time_hhmm_ok(s_tw2):
+                detail = "HH:MM"
+            elif str(s_tw1).strip() >= str(s_tw2).strip():
+                detail = f"{s_tw1} >= {s_tw2}"
+            if detail:
+                st.error(t("catalog_invalid", detail=detail))
+            else:
+                new_id = _save_ext_store({
+                    "store_name": str(s_name).strip(),
+                    "lat": float(s_lat), "lng": float(s_lng),
+                    "time_window": [str(s_tw1).strip(), str(s_tw2).strip()],
+                    "service_minutes": int(s_service),
+                })
+                st.session_state["cat_notice"] = t("catalog_saved", id=new_id,
+                                                   name=str(s_name).strip())
+                st.rerun()
+
+    # ---- 商品档案 ----
+    st.markdown(f"**{t('catalog_skus_title')}**")
+    query = str(st.text_input(t("catalog_search"), key="cat_sku_query") or "").strip().lower()
+
+    def _sku_row(s: dict, tag: str) -> dict:
+        return {
+            "SKU": s.get("sku"),
+            t("catalog_sku_name"): s.get("name"),
+            t("catalog_weight"): s.get("weight_kg"),
+            t("catalog_dims"): "×".join(str(s.get(k)) for k in
+                                        ("length_cm", "width_cm", "height_cm")),
+            t("catalog_fragile"): "✓" if s.get("fragile") else "",
+            t("catalog_stackable"): "✓" if s.get("stackable") else "",
+            t("catalog_layers"): s.get("max_stack_layers"),
+            t("catalog_source_tag"): tag,
+        }
+
+    sku_rows = [_sku_row(s, t("catalog_base")) for s in _collect_base_skus(base_orders)]
+    sku_rows += [_sku_row(s, t("catalog_ext")) for s in ext_skus]
+    if query:
+        sku_rows = [r for r in sku_rows
+                    if query in str(r["SKU"]).lower()
+                    or query in str(r[t("catalog_sku_name")]).lower()]
+    st.dataframe(sku_rows, width="stretch", hide_index=True)
+
+    with st.expander(t("catalog_add_sku"), expanded=False):
+        k_name = st.text_input(t("catalog_sku_name"), key="cat_sku_name_input")
+        c1, c2 = st.columns([1, 3])
+        k_weight = c1.number_input(t("catalog_weight"), min_value=0.01, max_value=100.0,
+                                   value=1.0, step=0.1, key="cat_sku_weight")
+        with c2:
+            st.caption(t("catalog_dims"))
+            d1, d2, d3 = st.columns(3)
+            k_l = d1.number_input("L", min_value=1.0, max_value=200.0, value=20.0,
+                                  key="cat_sku_l")
+            k_w = d2.number_input("W", min_value=1.0, max_value=200.0, value=15.0,
+                                  key="cat_sku_w")
+            k_h = d3.number_input("H", min_value=1.0, max_value=200.0, value=10.0,
+                                  key="cat_sku_h")
+        c3, c4, c5 = st.columns(3)
+        k_fragile = c3.checkbox(t("catalog_fragile"), key="cat_sku_fragile")
+        k_stackable = c4.checkbox(t("catalog_stackable"), value=True, key="cat_sku_stackable")
+        k_layers = c5.number_input(t("catalog_layers"), min_value=1, max_value=20, value=3,
+                                   key="cat_sku_layers")
+        if st.button(t("catalog_save_sku"), key="cat_sku_save"):
+            if not str(k_name).strip():
+                st.error(t("catalog_invalid", detail=t("catalog_sku_name")))
+            else:
+                new_id = _save_ext_sku({
+                    "name": str(k_name).strip(), "weight_kg": float(k_weight),
+                    "length_cm": float(k_l), "width_cm": float(k_w), "height_cm": float(k_h),
+                    "fragile": bool(k_fragile), "stackable": bool(k_stackable),
+                    "max_stack_layers": int(k_layers),
+                })
+                st.session_state["cat_notice"] = t("catalog_saved", id=new_id,
+                                                   name=str(k_name).strip())
+                st.rerun()
 
 
 # ---------------------------------------------------------------- 主界面
@@ -783,6 +1139,9 @@ def main() -> None:
         st.info(t("info_hint"))
 
     st.divider()
+    with st.expander(t("catalog_title"), expanded=False):
+        _render_catalog_section(seed_key)
+
     with st.expander(t("nl_title"), expanded=False):
         st.caption(t("nl_lang_note"))
         to_parse = None

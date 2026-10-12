@@ -183,3 +183,57 @@ def test_app_t50d_parse_failed_no_merge_button(monkeypatch):
     assert [e for e in at.error], "解析失败应显示错误提示"
     merge_btns = [b for b in at.button if b.key == "merge_run"]
     assert (not merge_btns) or merge_btns[0].disabled, "解析失败时串联按钮应不可用"
+
+
+@pytest.fixture()
+def clean_catalog_ext():
+    """备份并恢复扩展档案目录（保证 T50e 测试的档案状态隔离）。"""
+    p = Path(APP).parent / "outputs" / "app-tmp" / "catalog-ext"
+    backup = {f.name: f.read_text(encoding="utf-8") for f in p.glob("*.json")} if p.exists() else {}
+    yield
+    if p.exists():
+        for f in p.glob("*.json"):
+            f.unlink()
+        for name, text in backup.items():
+            (p / name).write_text(text, encoding="utf-8")
+
+
+def test_app_t50e_archive_to_order_flow(monkeypatch, clean_catalog_ext):
+    """T50e 全链路：新建门店档案 → 一句话下单 → 匹配扩展档案 → 并入场景 → 车次分配。"""
+    _clear_llm_env(monkeypatch)
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+
+    # 1) 新增门店档案（默认经纬度即可）
+    name_input = [x for x in at.get("text_input") if x.key == "cat_store_name"][0]
+    name_input.set_value("新康药房")
+    at.run()
+    [b for b in at.button if b.key == "cat_store_save"][0].click()
+    at.run()
+    assert not at.exception and not at.error
+    assert any("已保存" in s.value and "新康药房" in s.value for s in at.success), \
+        [s.value for s in at.success]
+    # 档案文件已写入（C01）
+    stores_file = Path(APP).parent / "outputs" / "app-tmp" / "catalog-ext" / "stores.json"
+    assert stores_file.exists()
+    assert "新康药房" in stores_file.read_text(encoding="utf-8")
+
+    # 2) 用新门店一句话下单 → 解析
+    at.get("text_area")[0].set_value("明天上午给新康药房送 4 箱感冒灵，12 点前到")
+    at.run()
+    [b for b in at.button if b.key == "nl_parse"][0].click()
+    at.run()
+    assert not at.exception and not at.error
+
+    # 3) 并入场景 → 重跑配载 → 车次分配（扩展门店含坐标，可参与配载）
+    merge_btns = [b for b in at.button if b.key == "merge_run"]
+    assert merge_btns and not merge_btns[0].disabled
+    merge_btns[0].click()
+    at.run()
+    assert not at.exception and not at.error
+    success_text = " ".join(s.value for s in at.success)
+    assert "新康药房" in success_text and "C01" in success_text, success_text[:160]
+    assert "R0" in success_text, "应展示车次分配"
+    assert len(at.image) >= 1
