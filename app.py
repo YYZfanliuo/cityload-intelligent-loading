@@ -22,7 +22,9 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
+import json
 import os
 import re
 import sys
@@ -47,10 +49,11 @@ DATASETS = {
 APP_TMP = ROOT / "outputs" / "app-tmp"
 
 #: 自然语言下单内置示例（解析器当前支持中文输入；按钮文案即示例文本）
+#: 门店均为当前数据集门店库内门店（连锁药店01–30），可完整体验 T50d 端到端串联
 NL_EXAMPLES = [
-    "明天上午给康健药房送 5 箱感冒灵，12 点前到",
-    "后天上午 9 点到 11 点给民康药店送 3 箱布洛芬和 2 盒维生素C",
-    "明早 8 点给连锁药店07送 20 盒板蓝根颗粒",
+    "明天上午给连锁药店07送 5 箱感冒灵，12 点前到",
+    "后天上午 9 点到 11 点给连锁药店01送 3 箱布洛芬和 2 盒维生素C",
+    "明早 8 点给连锁药店22送 20 盒板蓝根颗粒",
 ]
 
 #: 本会话 LLM 配置对应的环境变量（仅运行时注入，用后清理）
@@ -132,6 +135,18 @@ STRINGS = {
         "polish_running": "正在润色指引（每条一次 LLM 调用）…",
         "polish_source_llm": "来源：LLM 润色",
         "polish_source_fallback": "来源：模板回退（{detail}）",
+        "merge_run_btn": "将此订单加入场景并运行智能配载",
+        "merge_disabled_hint": "未解析出可用的货物明细，无法加入场景。",
+        "merge_spinner": "正在合并场景并重新配载（约 10～30 秒）…",
+        "merge_note": "说明：新订单与其目标门店的既有订单合并为一个站点后重跑配载；"
+                      "临时数据集写入 outputs/app-tmp/merged-scene/，不改动 data/ 与已入库产物。",
+        "merge_ok": "新增订单 {order} 已并入「{store}（{sid}）」并重跑配载：由 {route} 配送"
+                    "（车型 {veh}），送达次序 {seq}/{total}，预计 {arrive} 到达。",
+        "merge_no_route": "该门店在本次新方案中未被分配到任何车次（详见 routes.json 未分配列表）。",
+        "merge_store_not_found": "该门店（{name}）不在当前配送网络内，暂无法加入场景——不编造坐标。",
+        "merge_failed": "合并或重跑失败：{detail}",
+        "merge_metrics_title": "合并后新方案指标",
+        "merge_route_title": "合并后路线图",
         "footer": "运行产物默认写入 outputs/app-tmp/（隔离目录），不覆盖已入库的 t25-final / t25-baseline。"
                   "命令行等效入口：python run.py --data data/ --out outputs/t25-final --comparison",
     },
@@ -213,6 +228,20 @@ STRINGS = {
         "polish_running": "Polishing guide (one LLM call per vehicle)...",
         "polish_source_llm": "Source: LLM polish",
         "polish_source_fallback": "Source: template fallback ({detail})",
+        "merge_run_btn": "Run Loading Optimization with This Order",
+        "merge_disabled_hint": "No usable item details parsed; cannot merge into the scene.",
+        "merge_spinner": "Merging scene and re-optimizing (about 10–30 s)...",
+        "merge_note": "Note: the new order is merged into the target store's existing order and the scene "
+                      "is re-optimized; the temp dataset goes to outputs/app-tmp/merged-scene/ without "
+                      "touching data/ or committed artifacts.",
+        "merge_ok": "New order {order} merged into {store} ({sid}) and re-optimized: served by {route} "
+                    "(vehicle {veh}), stop {seq}/{total}, ETA {arrive}.",
+        "merge_no_route": "The store was not assigned to any route in the new plan (see the unassigned list).",
+        "merge_store_not_found": "Store \"{name}\" is not in the current delivery network; cannot merge "
+                                 "— no coordinates invented.",
+        "merge_failed": "Merge / re-optimization failed: {detail}",
+        "merge_metrics_title": "Metrics after merge",
+        "merge_route_title": "Route map after merge",
         "footer": "Artifacts are written to outputs/app-tmp/ (isolated); t25-final / t25-baseline "
                   "are never overwritten. CLI equivalent: "
                   "python run.py --data data/ --out outputs/t25-final --comparison",
@@ -493,8 +522,8 @@ def _render_parsed_order(result: dict) -> None:
         st.json(result, expanded=False)
 
 
-def _nl_parse_and_show(text: str) -> None:
-    """调用 agent/parser.parse_requirement 并友好展示（含解析来源标注）。"""
+def _nl_parse_only(text: str) -> None:
+    """执行解析并把结果写入 session_state（跨 rerun 保持，供展示与 T50d 串联复用）。"""
     text = str(text or "").strip()
     if not text:
         st.warning(t("nl_empty_hint"))
@@ -503,8 +532,11 @@ def _nl_parse_and_show(text: str) -> None:
 
     with st.spinner(t("nl_parsing")):
         with _llm_env():  # 仅在本调用窗口注入 Key，用后恢复
-            result = parse_requirement(text)
+            st.session_state["nl_result"] = parse_requirement(text)
 
+
+def _render_nl_result(result: dict, seed_key: str) -> None:
+    """展示解析结果（来源/结构）与 T50d「并入场景 → 重跑配载」串联入口。"""
     if result.get("error"):
         st.error(t("nl_error", detail=result.get("detail") or result.get("error")))
         return
@@ -523,6 +555,190 @@ def _nl_parse_and_show(text: str) -> None:
         st.caption(t("nl_missing", fields="、".join(str(m) for m in missing)))
     st.markdown(f"**{t('nl_result_title')}**")
     _render_parsed_order(result)
+
+    # ---- T50d：将订单并入场景并重跑配载 ----
+    st.divider()
+    items = result.get("items") or []
+    if not items:
+        st.button(t("merge_run_btn"), key="merge_run", disabled=True)
+        st.caption(t("merge_disabled_hint"))
+    elif st.button(t("merge_run_btn"), type="primary", key="merge_run"):
+        with st.spinner(t("merge_spinner")):
+            try:
+                st.session_state["merged_result"] = _merge_and_run(result, seed_key)
+            except Exception as exc:  # 管线异常：明确提示，不崩界面
+                st.session_state["merged_result"] = {
+                    "error": "pipeline", "detail": f"{type(exc).__name__}: {exc}"}
+
+    merged = st.session_state.get("merged_result")
+    if merged and merged.get("seed") not in (None, seed_key):
+        merged = None  # 数据集已切换：旧合并结果不再适用
+    if merged:
+        _render_merged_result(merged)
+
+
+# ---------------------------------------------------------------- T50d 合并与重跑
+
+
+def _match_store(parsed: dict, order_list: list) -> dict | None:
+    """在当前数据集门店库中反查门店（不编造坐标），失败返回 None。
+
+    依次尝试：① store_id 精确；② 门店名精确（归一空格）；③ 「连锁药店+尾号」提取
+    （规则解析器可能截断店名尾号，故同时扫描 raw_text 原文）；④ 店名中的纯数字编号。
+    """
+    sid = str(parsed.get("store_id") or "").strip().upper()
+    by_id = {o["store_id"]: o for o in order_list if o.get("store_id")}
+    if sid in by_id:
+        return by_id[sid]
+
+    norm = lambda s: re.sub(r"\s+", "", str(s or ""))  # noqa: E731
+    name = norm(parsed.get("store_name"))
+    for o in order_list:
+        if name and norm(o.get("store_name")) == name:
+            return o
+
+    meta = parsed.get("parse_meta") or {}
+    for src in (name, norm(meta.get("raw_text"))):
+        m = re.search(r"连锁药店\s*0*(\d{1,2})", src)
+        if m:
+            cand = f"S{int(m.group(1)):02d}"
+            if cand in by_id:
+                return by_id[cand]
+
+    m = re.search(r"(\d{1,2})", name)
+    if m:
+        cand = f"S{int(m.group(1)):02d}"
+        if cand in by_id:
+            return by_id[cand]
+    return None
+
+
+def _next_merge_order_id(order_list: list) -> str:
+    """生成不与场景冲突的新订单号（OMERGE-001 起）。"""
+    existing = {str(o.get("order_id")) for o in order_list}
+    n = 1
+    while f"OMERGE-{n:03d}" in existing:
+        n += 1
+    return f"OMERGE-{n:03d}"
+
+
+def _merge_and_run(parsed: dict, seed_key: str) -> dict:
+    """T50d：把解析订单并入当前场景（临时目录），重跑配载并返回展示信息。
+
+    合并规则（为保持“每门店一单”的路由契约）：新订单并入其目标门店的既有订单——
+    items 追加、数量保留；time_window 采用新解析值（若解析到）；service_minutes 相加；
+    并在订单上留痕 merged_orders 便于追溯。坐标一律取自门店库，绝不编造。
+    全部产物仅写 outputs/app-tmp/merged-scene/，不改动 data/ 与已入库产物。
+    """
+    data_dir = Path(DATASETS[seed_key]["dir"])
+    orders = json.loads((data_dir / "orders.json").read_text(encoding="utf-8"))
+    store = _match_store(parsed, orders.get("orders") or [])
+    if store is None:
+        return {"error": "store_not_found", "store_name": parsed.get("store_name")}
+
+    target_sid = store["store_id"]
+    merged = copy.deepcopy(orders)
+    target = next(o for o in merged["orders"] if o.get("store_id") == target_sid)
+    new_order_id = _next_merge_order_id(merged["orders"])
+
+    new_items = []
+    for it in parsed.get("items") or []:
+        new_items.append({
+            "sku": it.get("sku"),
+            "name": it.get("name"),
+            "qty": int(it.get("qty") or 1),
+            "weight_kg": it.get("weight_kg"),
+            "length_cm": it.get("length_cm"),
+            "width_cm": it.get("width_cm"),
+            "height_cm": it.get("height_cm"),
+            "fragile": bool(it.get("fragile")),
+            "stackable": bool(it.get("stackable", True)),
+            "max_stack_layers": int(it.get("max_stack_layers") or 6),
+        })
+    target["items"] = list(target.get("items") or []) + new_items
+    if parsed.get("time_window"):
+        target["time_window"] = list(parsed["time_window"])
+    try:
+        target["service_minutes"] = int(target.get("service_minutes") or 0) + \
+            int(parsed.get("service_minutes") or 0)
+    except (TypeError, ValueError):
+        pass
+    target.setdefault("merged_orders", []).append(new_order_id)  # 留痕（下游忽略）
+
+    # ---- 写临时数据集（隔离目录）----
+    dataset_dir = APP_TMP / "merged-scene" / seed_key / "data"
+    dataset_dir.mkdir(parents=True, exist_ok=True)
+    (dataset_dir / "orders.json").write_text(
+        json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+    for name in ("vehicles.json", "network.json", "rules.json"):
+        (dataset_dir / name).write_text((data_dir / name).read_text(encoding="utf-8"),
+                                        encoding="utf-8")
+
+    # ---- 重跑配载（复用既有管线；产物写 merged-scene/out/）----
+    out_dir = APP_TMP / "merged-scene" / seed_key / "out"
+    result = pipeline.run_pipeline(str(dataset_dir), out_dir, baseline=False, comparison=False)
+
+    route_info = None
+    for route in result["routes"].get("routes") or []:
+        seq = [s for s in (route.get("sequence") or []) if s != "WH01"]
+        if target_sid in seq:
+            stop = next((d for d in (route.get("stop_details") or [])
+                         if d.get("node") == target_sid), {})
+            route_info = {
+                "route_id": route.get("route_id"),
+                "vehicle_type": route.get("vehicle_type"),
+                "seq": seq.index(target_sid) + 1,
+                "total": len(seq),
+                "arrive": stop.get("arrive"),
+            }
+            break
+
+    figures = [Path(p) for p in result["figures"]]
+    route_map = next((p for p in figures if p.name == "route_map.png"), None)
+    return {
+        "error": None,
+        "seed": seed_key,
+        "store": store,
+        "new_order_id": new_order_id,
+        "route_info": route_info,
+        "metrics": result["metrics"].get("metrics") or {},
+        "route_map": str(route_map) if route_map else None,
+        "out_dir": str(out_dir),
+    }
+
+
+def _render_merged_result(m: dict) -> None:
+    """展示 T50d 合并重跑结果：该门店的车次分配 + 新方案指标 + 路线图。"""
+    if m.get("error"):
+        if m.get("error") == "store_not_found":
+            st.warning(t("merge_store_not_found", name=str(m.get("store_name") or "—")))
+        else:
+            st.error(t("merge_failed", detail=str(m.get("detail") or m.get("error"))))
+        return
+
+    store, info = m["store"], m.get("route_info")
+    if info:
+        st.success(t("merge_ok", order=m["new_order_id"],
+                     store=store.get("store_name") or "—", sid=store.get("store_id") or "—",
+                     route=info.get("route_id") or "—", veh=info.get("vehicle_type") or "—",
+                     seq=info.get("seq"), total=info.get("total"),
+                     arrive=info.get("arrive") or "—"))
+    else:
+        st.warning(t("merge_no_route"))
+    st.caption(t("merge_note"))
+
+    mm = m.get("metrics") or {}
+    st.markdown(f"**{t('merge_metrics_title')}**")
+    placed, total = mm.get("placed_item_count"), mm.get("total_item_count")
+    cols = st.columns(4)
+    cols[0].metric(t("kpi_vehicles"), f"{mm.get('vehicle_count', '—')}{t('unit_vehicles')}")
+    cols[1].metric(t("kpi_distance"), f"{mm.get('total_distance_km', '—')} km")
+    cols[2].metric(t("kpi_cost"), f"¥{mm.get('total_cost', '—')}")
+    cols[3].metric(t("kpi_fill"),
+                   f"{placed / total * 100:.1f}%" if total and placed is not None else "—")
+    if m.get("route_map"):
+        st.markdown(f"**{t('merge_route_title')}**")
+        st.image(m["route_map"], width="stretch")
 
 
 # ---------------------------------------------------------------- 主界面
@@ -581,7 +797,11 @@ def main() -> None:
         if st.button(t("nl_parse_btn"), type="primary", key="nl_parse"):
             to_parse = text
         if to_parse is not None:
-            _nl_parse_and_show(to_parse)
+            st.session_state.pop("merged_result", None)  # 新解析：清除上一次合并结果
+            _nl_parse_only(to_parse)
+        parsed = st.session_state.get("nl_result")
+        if parsed is not None:
+            _render_nl_result(parsed, seed_key)
 
     st.divider()
     st.caption(t("footer"))

@@ -122,3 +122,64 @@ def test_app_llm_key_injection_cleanup_and_fallback(monkeypatch):
     assert any("已自动降级" in i.value or "解析来源：规则引擎" in i.value for i in at.info)
     for var in ("CITYLOAD_LLM_API_KEY", "CITYLOAD_LLM_BASE_URL", "CITYLOAD_LLM_MODEL"):
         assert not os.environ.get(var), f"注入的环境变量 {var} 未被清理"
+
+
+def test_app_t50d_merge_happy_path(monkeypatch):
+    """T50d：一句话 → 解析 → 并入场景 → 重跑配载 → 该单分到车次 + 新指标 + 路线图。"""
+    _clear_llm_env(monkeypatch)
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    # 示例 1（连锁药店07）→ 解析
+    [b for b in at.button if b.key == "nl_example_0"][0].click()
+    at.run()
+    assert not at.exception and not at.error
+    # 串联按钮可用 → 点击 → 重跑配载
+    merge_btns = [b for b in at.button if b.key == "merge_run"]
+    assert merge_btns and not merge_btns[0].disabled, "解析成功后串联按钮应可用"
+    merge_btns[0].click()
+    at.run()
+    assert not at.exception and not at.error
+    # 车次分配 + 新方案指标 + 路线图
+    success_text = " ".join(s.value for s in at.success)
+    assert "并入" in success_text and "R0" in success_text, f"应展示车次分配：{success_text[:120]}"
+    metric_labels = [m.label for m in at.metric]
+    assert "车辆数" in metric_labels and "总里程" in metric_labels
+    assert len(at.image) >= 1, "应展示合并后路线图"
+
+
+def test_app_t50d_store_not_found(monkeypatch):
+    """T50d 边界：门店不在当前配送网络 → 明确提示，不崩溃、不编造坐标。"""
+    _clear_llm_env(monkeypatch)
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(APP, default_timeout=120)
+    at.run()
+    at.get("text_area")[0].set_value("给幸福大药房送 2 箱板蓝根")
+    at.run()
+    [b for b in at.button if b.key == "nl_parse"][0].click()
+    at.run()
+    merge_btns = [b for b in at.button if b.key == "merge_run"]
+    assert merge_btns and not merge_btns[0].disabled
+    merge_btns[0].click()
+    at.run()
+    assert not at.exception and not at.error
+    assert any("不在当前配送网络" in w.value for w in at.warning), "应提示门店不在网络内"
+
+
+def test_app_t50d_parse_failed_no_merge_button(monkeypatch):
+    """T50d 边界：解析失败 → 显示错误提示，且不出现可点击的串联按钮。"""
+    _clear_llm_env(monkeypatch)
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(APP, default_timeout=120)
+    at.run()
+    at.get("text_area")[0].set_value("你好")
+    at.run()
+    [b for b in at.button if b.key == "nl_parse"][0].click()
+    at.run()
+    assert not at.exception, at.exception
+    assert [e for e in at.error], "解析失败应显示错误提示"
+    merge_btns = [b for b in at.button if b.key == "merge_run"]
+    assert (not merge_btns) or merge_btns[0].disabled, "解析失败时串联按钮应不可用"
